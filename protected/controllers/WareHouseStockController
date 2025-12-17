@@ -1,0 +1,22 @@
+<?php
+class WarehouseStockController extends Controller
+{
+    public function actionIndex()
+    {
+        $stocks = WarehouseStock::model()->with('product','warehouse')->findAll();
+        $this->render('index', ['stocks' => $stocks]);
+    }
+
+    public function actionUpdateQuantity($id)
+    {
+        $stock = WarehouseStock::model()->findByPk($id);
+        if (!$stock) throw new CHttpException(404);
+
+        if (isset($_POST['WarehouseStock'])) {
+            $stock->quantity = $_POST['WarehouseStock']['quantity'];
+            if ($stock->save()) $this->redirect(['index']);
+        }
+
+        $this->render('updateQuantity', ['stock' => $stock]);
+    }
+}

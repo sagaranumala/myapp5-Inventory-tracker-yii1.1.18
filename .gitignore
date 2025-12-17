@@ -1,0 +1,69 @@
+# ================================
+# Yii Application Git Ignore
+# ================================
+
+# ---- Yii runtime ----
+protected/runtime/
+runtime/
+
+# ---- Yii assets ----
+assets/
+protected/assets/
+web/assets/
+
+# ---- Uploads (optional, only if generated dynamically) ----
+uploads/
+public/uploads/
+
+# ---- Environment-specific configs (optional) ----
+protected/config/local.php
+protected/config/console-local.php
+config/db-local.php
+config/params-local.php
+
+# ---- Composer ----
+/vendor/
+/composer.lock
+composer.phar
+
+# ---- Node / Frontend (if exists) ----
+/node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# ---- IDE Files ----
+# JetBrains / PhpStorm
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+
+# Eclipse
+.project
+.buildpath
+
+# ---- OS Generated Files ----
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+*.log
+
+# ---- Cache ----
+cache/
+protected/cache/
+
+# ---- Temporary Files ----
+*.tmp
+*.swp
+*.bak
+
+# ---- Environment variables ----
+.env
+.env.local
+
+# ---- PHPUnit ----
+/tests/_output/
+/tests/runtime/
+

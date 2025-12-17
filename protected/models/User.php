@@ -1,0 +1,143 @@
+<?php
+/**
+ * User model - Enterprise version with ULID
+ */
+class User extends BaseModel
+{
+    /**
+     * @return string the associated database table name
+     */
+    public function tableName()
+    {
+        return 'users';
+    }
+
+    /**
+     * @return array validation rules for model attributes.
+     */
+    public function rules()
+    {
+        return array(
+            // Required fields
+            array('name, email, password, userId', 'required'),
+            
+            // Length limits
+            array('name, email, password, phone, role, userId', 'length', 'max' => 255),
+            
+            // Unique constraints
+            array('email, userId', 'unique'),
+            
+            // Email format
+            array('email', 'email'),
+            
+            // Default values
+            array('role', 'default', 'value' => 'user'),
+            array('createdAt', 'default', 'value' => date('Y-m-d H:i:s'), 'on' => 'insert'),
+        );
+    }
+
+    /**
+     * @return array customized attribute labels
+     */
+    public function attributeLabels()
+    {
+        return array(
+            'id' => 'ID',
+            'name' => 'Name',
+            'email' => 'Email',
+            'password' => 'Password',
+            'phone' => 'Phone',
+            'role' => 'Role',
+            'createdAt' => 'Created At',
+            'userId' => 'User ID',
+        );
+    }
+
+    /**
+     * Returns the static model
+     */
+    public static function model($className = __CLASS__)
+    {
+        return parent::model($className);
+    }
+
+    /**
+     * Specify which fields should auto-generate ULID
+     */
+    protected function ulidFields()
+    {
+        return ['userId'];
+    }
+
+    /**
+     * Finds user by email
+     */
+    public static function findByEmail($email)
+    {
+        return self::model()->findByAttributes(array('email' => $email));
+    }
+
+    /**
+     * Finds user by userId
+     */
+    public static function findByUserId($userId)
+    {
+        return self::model()->findByAttributes(array('userId' => $userId));
+    }
+
+    /**
+     * Validates password
+     */
+    public function validatePassword($password)
+    {
+        return CPasswordHelper::verifyPassword($password, $this->password);
+    }
+
+    /**
+     * Generates password hash
+     */
+    public function hashPassword($password)
+    {
+        return CPasswordHelper::hashPassword($password);
+    }
+
+    /**
+     * Before save - hash password
+     * ULID generation is handled by BaseModel
+     */
+    protected function beforeSave()
+    {
+        if (parent::beforeSave()) {
+            // Hash password if it's new or changed
+            if ($this->isNewRecord || $this->password !== $this->getOldAttribute('password')) {
+                $this->password = $this->hashPassword($this->password);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get user data for API response
+     */
+    public function getApiData()
+    {
+        return array(
+            'id' => $this->id,
+            'userId' => $this->userId,
+            'name' => $this->name,
+            'email' => $this->email,
+            'role' => $this->role,
+            'phone' => $this->phone,
+            'createdAt' => $this->createdAt
+        );
+    }
+    
+    /**
+     * Check if user is admin
+     */
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+}
