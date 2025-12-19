@@ -120,8 +120,8 @@ return array(
 
         // Request
         'request' => array(
-            'enableCookieValidation' => true,
-            'enableCsrfValidation' => true,
+            'enableCookieValidation' => false,
+            'enableCsrfValidation' => false,
         ),
 
         // Database

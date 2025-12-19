@@ -1,6 +1,39 @@
 <?php
 class AuthController extends Controller
 {
+
+    /**
+     * Disable CSRF for API actions
+     */
+   public function beforeAction($action)
+{
+    Yii::log("Before action called for: {$action->id}", CLogger::LEVEL_INFO, 'auth');
+
+    // API actions that should NOT require CSRF
+    $apiActions = ['login', 'signup', 'refresh', 'check', 'forgotPassword', 'resetPassword'];
+
+    Yii::log(
+        "CSRF enabled before: " .
+        (Yii::app()->request->enableCsrfValidation ? 'YES' : 'NO'),
+        CLogger::LEVEL_INFO,
+        'auth'
+    );
+
+    if (in_array($action->id, $apiActions)) {
+        Yii::app()->request->enableCsrfValidation = false;
+        Yii::log("CSRF disabled for action: {$action->id}", CLogger::LEVEL_INFO, 'auth');
+    }
+
+    Yii::log(
+        "CSRF enabled after: " .
+        (Yii::app()->request->enableCsrfValidation ? 'YES' : 'NO'),
+        CLogger::LEVEL_INFO,
+        'auth'
+    );
+
+    return parent::beforeAction($action);
+}
+
     /**
      * WEB: GET /auth/login - Display login form
      * API: POST /auth/login - Handle API login

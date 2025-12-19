@@ -67,3 +67,85 @@ protected/cache/
 /tests/_output/
 /tests/runtime/
 
+# =========================
+# Dependencies
+# =========================
+Frontend/
+UI/
+node_modules/
+.pnp/
+.pnp.js
+
+# =========================
+# Next.js build output
+# =========================
+.next/
+out/
+dist/
+
+# =========================
+# Production builds
+# =========================
+build/
+
+# =========================
+# Environment files
+# =========================
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# =========================
+# Logs
+# =========================
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+*.log
+
+# =========================
+# OS files
+# =========================
+.DS_Store
+Thumbs.db
+
+# =========================
+# IDE / Editor
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# TypeScript
+# =========================
+*.tsbuildinfo
+
+# =========================
+# ESLint / Prettier
+# =========================
+.eslintcache
+
+# =========================
+# Testing
+# =========================
+coverage/
+.nyc_output/
+
+# =========================
+# Docker
+# =========================
+docker-data/
+docker-volumes/
+
+# =========================
+# Optional (remove if needed)
+# =========================
+.vercel/
+
+

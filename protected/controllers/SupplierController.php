@@ -1,11 +1,37 @@
 <?php
 class SupplierController extends Controller
 {
+    protected function arToArray($ar)
+    {
+        if (is_array($ar)) {
+            $data = [];
+            foreach ($ar as $item) {
+                $data[] = $this->arToArray($item);
+            }
+            return $data;
+        }
+        $attributes = $ar->attributes;
+        foreach ($ar->relations() as $name => $relation) {
+            if ($ar->$name !== null) {
+                $attributes[$name] = $this->arToArray($ar->$name);
+            }
+        }
+        return $attributes;
+    }
+
     public function actionIndex()
     {
-        $suppliers = Supplier::model()->findAll();
-        if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$suppliers]);
-        else $this->render('index',['suppliers'=>$suppliers]);
+        // $suppliers = Supplier::model()->findAll();
+        // if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$suppliers]);
+        // else $this->render('index',['suppliers'=>$suppliers]);
+
+         $suppliers = Supplier::model()->findAll();
+
+        if ($this->isApiRequest()) {
+            $data = $this->arToArray($suppliers);
+            $this->sendJson(['success' => true, 'data' => $data]);
+            return;
+        }
     }
 
     public function actionCreate()
@@ -18,7 +44,7 @@ class SupplierController extends Controller
                 else $this->redirect(['index']);
             }
         }
-        $this->render('create',['model'=>$model]);
+        // $this->render('create',['model'=>$model]);
     }
 
     public function actionUpdate($id)
@@ -32,7 +58,7 @@ class SupplierController extends Controller
                 else $this->redirect(['index']);
             }
         }
-        $this->render('update',['model'=>$model]);
+        // $this->render('update',['model'=>$model]);
     }
 
     public function actionDelete($id)

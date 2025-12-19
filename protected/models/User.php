@@ -1,8 +1,8 @@
 <?php
 /**
- * User model - Enterprise version with ULID
+ * User model - Simplified version
  */
-class User extends BaseModel
+class User extends CActiveRecord
 {
     /**
      * @return string the associated database table name
@@ -62,14 +62,6 @@ class User extends BaseModel
     }
 
     /**
-     * Specify which fields should auto-generate ULID
-     */
-    protected function ulidFields()
-    {
-        return ['userId'];
-    }
-
-    /**
      * Finds user by email
      */
     public static function findByEmail($email)
@@ -102,8 +94,7 @@ class User extends BaseModel
     }
 
     /**
-     * Before save - hash password
-     * ULID generation is handled by BaseModel
+     * Before save - hash password and generate userId
      */
     protected function beforeSave()
     {
@@ -112,6 +103,12 @@ class User extends BaseModel
             if ($this->isNewRecord || $this->password !== $this->getOldAttribute('password')) {
                 $this->password = $this->hashPassword($this->password);
             }
+            
+            // Generate userId for new records
+            if ($this->isNewRecord && empty($this->userId)) {
+                $this->userId = 'usr_' . time() . '_' . rand(1000, 9999);
+            }
+            
             return true;
         }
         return false;

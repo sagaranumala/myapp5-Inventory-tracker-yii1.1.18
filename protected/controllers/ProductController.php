@@ -1,46 +1,181 @@
 <?php
 class ProductController extends Controller
 {
+    public function beforeAction($action)
+    {
+        // Disable CSRF for API endpoints
+        if (Yii::app()->request->isAjaxRequest || Yii::app()->request->getRequestType() === 'POST') {
+            Yii::app()->request->enableCsrfValidation = false;
+        }
+        return parent::beforeAction($action);
+    }
+    // Utility function to convert AR objects to arrays, including relations
+    protected function arToArray($ar)
+    {
+        if (is_array($ar)) {
+            $data = [];
+            foreach ($ar as $item) {
+                $data[] = $this->arToArray($item);
+            }
+            return $data;
+        }
+        $attributes = $ar->attributes;
+        foreach ($ar->relations() as $name => $relation) {
+            if ($ar->$name !== null) {
+                $attributes[$name] = $this->arToArray($ar->$name);
+            }
+        }
+        return $attributes;
+    }
+
+    // LIST PRODUCTS
     public function actionIndex()
     {
         $products = Product::model()->with('category')->findAll();
-        $this->render('index', ['products' => $products]);
+
+        if ($this->isApiRequest()) {
+            $data = $this->arToArray($products);
+            $this->sendJson(['success' => true, 'data' => $data]);
+            return;
+        }
+        // $this->render('index', ['products' => $products]);
     }
 
+    // VIEW PRODUCT
     public function actionView($id)
     {
-        $product = Product::model()->findByPk($id);
-        if (!$product) throw new CHttpException(404);
+        $product = Product::model()->with('category')->findByPk($id);
+        if (!$product) {
+            if ($this->isApiRequest()) {
+                $this->sendJson(['success' => false, 'message' => 'Product not found'], 404);
+                return;
+            }
+            throw new CHttpException(404);
+        }
+
+        if ($this->isApiRequest()) {
+            $data = $this->arToArray($product);
+            $this->sendJson(['success' => true, 'data' => $data]);
+            return;
+        }
         $this->render('view', ['product' => $product]);
     }
 
+    // public function actionCreate()
+    //     {
+    //         $model = new Product();
+
+    //         if (Yii::app()->request->isPostRequest) {
+    //             $json = file_get_contents('php://input');
+    //             $data = json_decode($json, true);
+
+    //             if (!$data) {
+    //                 $this->sendJson(['success' => false, 'message' => 'Invalid JSON'], 400);
+    //                 return;
+    //             }
+
+    //             // Direct assignment
+    //             $model->sku         = $data['sku'] ?? null;
+    //             $model->name        = $data['name'] ?? null;
+    //             $model->categoryId  = $data['categoryId'] ?? null;
+    //             $model->unitPrice   = $data['unitPrice'] ?? null;
+    //             $model->costPrice   = $data['costPrice'] ?? null;
+    //             $model->reorderLevel= $data['reorderLevel'] ?? null;
+    //             $model->expiryDate  = $data['expiryDate'] ?? null;
+    //             $model->isActive    = $data['isActive'] ?? 1;
+
+    //             if ($model->save()) {
+    //                 $this->sendJson(['success' => true, 'data' => [
+    //                     'sku' => $model->sku,
+    //                     'name' => $model->name,
+    //                     'categoryId' => $model->categoryId,
+    //                     'unitPrice' => $model->unitPrice,
+    //                     'costPrice' => $model->costPrice,
+    //                     'reorderLevel' => $model->reorderLevel,
+    //                     'expiryDate' => $model->expiryDate,
+    //                     'isActive' => $model->isActive
+    //                 ]]);
+    //             } else {
+    //                 $this->sendJson(['success' => false, 'errors' => $model->getErrors()], 400);
+    //             }
+    //         } else {
+    //             $this->sendJson(['success' => false, 'message' => 'Invalid request, POST required'], 400);
+    //         }
+    //     }
+
     public function actionCreate()
-    {
-        $model = new Product();
-        if (isset($_POST['Product'])) {
-            $model->attributes = $_POST['Product'];
-            if ($model->save()) $this->redirect(['view', 'id' => $model->id]);
-        }
-        $categories = Category::model()->findAll();
-        $this->render('create', ['model' => $model, 'categories' => $categories]);
+{
+    $model = new Product();
+
+    // Decode incoming JSON into an array
+    $data = json_decode(file_get_contents('php://input'), true);
+
+    if (!$data) {
+        echo json_encode(['success' => false, 'message' => 'Invalid JSON']);
+        Yii::app()->end();
     }
 
-    public function actionUpdate($id)
-    {
-        $model = Product::model()->findByPk($id);
-        if (!$model) throw new CHttpException(404);
-        if (isset($_POST['Product'])) {
-            $model->attributes = $_POST['Product'];
-            if ($model->save()) $this->redirect(['view', 'id' => $model->id]);
-        }
-        $categories = Category::model()->findAll();
-        $this->render('update', ['model' => $model, 'categories' => $categories]);
+    // Directly assign JSON keys to model attributes
+    $model->attributes = $data;
+
+    // Save record
+    if ($model->save()) {
+        echo json_encode([
+            'success' => true,
+            'data' => $model->attributes  // just return raw attributes
+        ]);
+    } else {
+        echo json_encode([
+            'success' => false,
+            'errors' => $model->getErrors()
+        ]);
     }
 
+    Yii::app()->end();
+}
+
+
+
+
+  public function actionUpdate($id)
+{
+    $model = Product::model()->findByPk($id);
+    if (!$model) {
+        $this->sendJson(['success' => false, 'message' => 'Product not found'], 404);
+        return;
+    }
+
+    // Get raw input
+    $raw = file_get_contents('php://input');
+
+    // Log to PHP error log (Docker captures stderr)
+    error_log("RAW INPUT FOR PRODUCT UPDATE: " . $raw);
+
+    // Also send back in response for Postman debugging
+    header('Content-Type: application/json');
+    echo json_encode([
+        'debug' => [
+            'raw_input' => $raw,
+        ]
+    ]);
+
+    Yii::app()->end();
+}
+
+
+
+
+
+    // DELETE PRODUCT
     public function actionDelete($id)
     {
         $model = Product::model()->findByPk($id);
         if ($model) $model->delete();
+
+        if ($this->isApiRequest()) {
+            $this->sendJson(['success' => true]);
+            return;
+        }
         $this->redirect(['index']);
     }
 }

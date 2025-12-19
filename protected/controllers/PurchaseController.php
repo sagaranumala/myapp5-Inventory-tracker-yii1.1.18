@@ -1,11 +1,36 @@
-<?php
+<!-- <?php
 class PurchaseController extends Controller
 {
+    protected function arToArray($ar)
+    {
+        if (is_array($ar)) {
+            $data = [];
+            foreach ($ar as $item) {
+                $data[] = $this->arToArray($item);
+            }
+            return $data;
+        }
+        $attributes = $ar->attributes;
+        foreach ($ar->relations() as $name => $relation) {
+            if ($ar->$name !== null) {
+                $attributes[$name] = $this->arToArray($ar->$name);
+            }
+        }
+        return $attributes;
+    }
     public function actionIndex()
     {
-        $purchases = Purchase::model()->with('supplier', 'warehouse', 'items')->findAll();
-        if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$purchases]);
-        else $this->render('index',['purchases'=>$purchases]);
+        // $purchases = Purchase::model()->with('supplier', 'warehouse', 'items')->findAll();
+        // if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$purchases]);
+        // else $this->render('index',['purchases'=>$purchases]);
+
+         $purchases = Purchase::model()->with('supplier', 'warehouse', 'items')->findAll();
+
+        if ($this->isApiRequest()) {
+            $data = $this->arToArray($purchases);
+            $this->sendJson(['success' => true, 'data' => $data]);
+            return;
+        }
     }
 
     public function actionView($id)
@@ -87,4 +112,4 @@ class PurchaseController extends Controller
         if($this->isApiRequest()) $this->sendJson(['success'=>true]);
         else $this->redirect(['index']);
     }
-}
+} 

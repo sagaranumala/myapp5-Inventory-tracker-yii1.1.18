@@ -65,14 +65,14 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - /c/xampp/htdocs/myapp4:/var/www/html
+      - /c/xampp/htdocs/myapp5:/var/www/html
       - /c/xampp/htdocs/yii-1.1.18.018a89:/var/www/yii
     environment:
       APP_ENV: dev
       YII_DEBUG: "true"
       YII_TRACE_LEVEL: "3"
       DB_HOST: host.docker.internal
-      DB_NAME: ticketdb
+      DB_NAME: wareflow
       DB_USER: root
       DB_PASS: Sagar@194
       SMTP_EMAIL: sagarpatelanumala7522@gmail.com

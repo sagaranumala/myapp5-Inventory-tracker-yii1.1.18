@@ -3,6 +3,9 @@
 
 class BaseModel extends CActiveRecord
 {
+    /**
+     * Generate ULID (Universally Unique Lexicographically Sortable Identifier)
+     */
     protected function generateUlid()
     {
         $chars = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -19,6 +22,9 @@ class BaseModel extends CActiveRecord
         return $timeChars . $randomChars;
     }
 
+    /**
+     * Before validate hook to auto-generate ULIDs
+     */
     protected function beforeValidate()
     {
         if ($this->isNewRecord) {
@@ -31,8 +37,40 @@ class BaseModel extends CActiveRecord
         return parent::beforeValidate();
     }
 
+    /**
+     * Define which fields should use ULID
+     * Override in child models
+     */
     protected function ulidFields()
     {
         return [];
+    }
+    
+    /**
+     * Get data for API responses
+     */
+    public function getApiData()
+    {
+        return $this->attributes;
+    }
+    
+    /**
+     * Get data for API responses with specific fields
+     */
+    public function getSafeApiData($fields = [])
+    {
+        $data = $this->attributes;
+        
+        if (!empty($fields)) {
+            $filtered = [];
+            foreach ($fields as $field) {
+                if (isset($data[$field])) {
+                    $filtered[$field] = $data[$field];
+                }
+            }
+            return $filtered;
+        }
+        
+        return $data;
     }
 }
