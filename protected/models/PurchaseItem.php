@@ -3,19 +3,13 @@
 /**
  * This is the model class for table "purchaseItems".
  *
- * @property integer $id
  * @property string $purchaseItemId
  * @property string $purchaseId
  * @property string $productId
  * @property integer $quantity
  * @property double $unitCost
- * @property string $createdAt
- * @property string $updatedAt
- * 
- * @property Purchase $purchase
- * @property Product $product
  */
-class PurchaseItem extends CActiveRecord
+class PurchaseItem extends BaseModel
 {
     /**
      * @return string the associated database table name
@@ -26,18 +20,39 @@ class PurchaseItem extends CActiveRecord
     }
 
     /**
+     * Specify ULID fields
+     */
+    protected function ulidFields()
+    {
+        return array('purchaseItemId');
+    }
+
+    /**
      * @return array validation rules for model attributes.
      */
     public function rules()
     {
         return array(
+            // Required fields
             array('purchaseId, productId, quantity, unitCost', 'required'),
-            array('quantity', 'numerical', 'integerOnly'=>true, 'min'=>1),
-            array('unitCost', 'numerical', 'min'=>0),
-            array('purchaseItemId, purchaseId, productId', 'length', 'max'=>26),
-            array('createdAt, updatedAt', 'safe'),
-            // The following rule is used by search().
-            array('id, purchaseItemId, purchaseId, productId, quantity, unitCost, createdAt, updatedAt', 'safe', 'on'=>'search'),
+            
+            // Numeric validation
+            array('quantity', 'numerical', 'integerOnly' => true, 'min' => 1, 'message' => 'Quantity must be an integer greater than 0'),
+            array('unitCost', 'numerical', 'min' => 0, 'message' => 'Unit cost must be a positive number'),
+            
+            // Length validation
+            array('purchaseItemId, purchaseId, productId', 'length', 'max' => 26),
+            
+            // Auto-generate purchaseItemId on insert
+            array('purchaseItemId', 'default', 'value' => function() {
+                return $this->generateUlid();
+            }, 'on' => 'insert'),
+            
+            // Safe fields for create/update
+            array('purchaseId, productId, quantity, unitCost', 'safe', 'on' => 'create, update'),
+            
+            // Search scenario
+            array('purchaseItemId, purchaseId, productId, quantity, unitCost', 'safe', 'on' => 'search'),
         );
     }
 
@@ -58,40 +73,22 @@ class PurchaseItem extends CActiveRecord
     public function attributeLabels()
     {
         return array(
-            'id' => 'ID',
-            'purchaseItemId' => 'Item ID',
-            'purchaseId' => 'Purchase',
-            'productId' => 'Product',
+            'purchaseItemId' => 'Purchase Item ID',
+            'purchaseId' => 'Purchase ID',
+            'productId' => 'Product ID',
             'quantity' => 'Quantity',
             'unitCost' => 'Unit Cost',
-            'createdAt' => 'Created At',
-            'updatedAt' => 'Updated At',
         );
     }
 
     /**
-     * Behaviors
-     */
-    public function behaviors()
-    {
-        return array(
-            'CTimestampBehavior' => array(
-                'class' => 'zii.behaviors.CTimestampBehavior',
-                'createAttribute' => 'createdAt',
-                'updateAttribute' => 'updatedAt',
-                'setUpdateOnCreate' => true,
-            ),
-        );
-    }
-
-    /**
-     * Before save - Yii 1.x doesn't take parameters
+     * Before save - auto-generate purchaseItemId if not set
      */
     protected function beforeSave()
     {
         if (parent::beforeSave()) {
-            if ($this->isNewRecord) {
-                $this->purchaseItemId = $this->generateId('PITM_');
+            if ($this->isNewRecord && empty($this->purchaseItemId)) {
+                $this->purchaseItemId = $this->generateUlid();
             }
             
             return true;
@@ -100,18 +97,7 @@ class PurchaseItem extends CActiveRecord
     }
 
     /**
-     * Generate ID
-     */
-    private function generateId($prefix = '')
-    {
-        $microtime = str_replace('.', '', microtime(true));
-        $random = bin2hex(random_bytes(5));
-        $id = $prefix . substr($microtime, -10) . $random;
-        return substr($id, 0, 26);
-    }
-
-    /**
-     * Calculate total cost
+     * Calculate total cost for this item
      */
     public function getTotalCost()
     {
@@ -119,34 +105,7 @@ class PurchaseItem extends CActiveRecord
     }
 
     /**
-     * Retrieves a list of models based on the current search/filter conditions.
-     *
-     * @return CActiveDataProvider the data provider that can return the models
-     * based on the search/filter conditions.
-     */
-    public function search()
-    {
-        $criteria=new CDbCriteria;
-
-        $criteria->compare('id',$this->id);
-        $criteria->compare('purchaseItemId',$this->purchaseItemId,true);
-        $criteria->compare('purchaseId',$this->purchaseId,true);
-        $criteria->compare('productId',$this->productId,true);
-        $criteria->compare('quantity',$this->quantity);
-        $criteria->compare('unitCost',$this->unitCost);
-        $criteria->compare('createdAt',$this->createdAt,true);
-        $criteria->compare('updatedAt',$this->updatedAt,true);
-
-        return new CActiveDataProvider($this, array(
-            'criteria'=>$criteria,
-        ));
-    }
-
-    /**
      * Returns the static model of the specified AR class.
-     * Please note that you should have this exact method in all your CActiveRecord descendants!
-     * @param string $className active record class name.
-     * @return PurchaseItem the static model class
      */
     public static function model($className=__CLASS__)
     {

@@ -63,9 +63,9 @@
     </div>
 
     <!-- Right: Language Switcher -->
-    <div style="margin-right:15px;">
-        <?php $this->widget('application.components.LanguageSwitcher'); ?>
-    </div>
+    <!-- <div style="margin-right:15px;">
+        
+    </div> -->
 </div>
 
 

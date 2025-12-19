@@ -9,11 +9,8 @@
  * @property string $warehouseId
  * @property double $totalAmount
  * @property string $status
- * @property string $notes
- * @property string $expectedDelivery
  * @property string $createdBy
  * @property string $createdAt
- * @property string $updatedAt
  * 
  * @property Supplier $supplier
  * @property Warehouse $warehouse
@@ -39,21 +36,48 @@ class Purchase extends BaseModel
     }
 
     /**
+     * Specify ULID fields
+     */
+    protected function ulidFields()
+    {
+        return array('purchaseId');
+    }
+
+    /**
      * @return array validation rules for model attributes.
      */
-    public function rules()
-    {
-        return array(
-            array('supplierId, warehouseId', 'required'),
-            array('totalAmount', 'numerical'),
-            array('purchaseId, supplierId, warehouseId, createdBy', 'length', 'max'=>26),
-            array('status', 'length', 'max'=>50),
-            array('notes', 'safe'),
-            array('expectedDelivery, createdAt, updatedAt', 'safe'),
-            // The following rule is used by search().
-            array('id, purchaseId, supplierId, warehouseId, totalAmount, status, notes, expectedDelivery, createdBy, createdAt, updatedAt', 'safe', 'on'=>'search'),
-        );
-    }
+    /**
+ * @return array validation rules for model attributes.
+ */
+public function rules()
+{
+    return array(
+        // Required fields with DIFFERENT messages
+        array('supplierId', 'required', 'message' => 'Supplier ID is required.'),
+        array('warehouseId', 'required', 'message' => 'Warehouse ID is required.'),
+        
+        // Numeric validation
+        array('totalAmount', 'numerical', 'message' => 'Total Amount must be a number.'),
+        
+        // Length validation
+        array('purchaseId, supplierId, warehouseId, createdBy', 'length', 'max'=>26),
+        array('status', 'length', 'max'=>50),
+        
+        // Safe fields
+        array('createdAt', 'safe'),
+        
+        // Auto-generate purchaseId on insert
+        array('purchaseId', 'default', 'value' => function() {
+            return $this->generateUlid();
+        }, 'on' => 'insert'),
+        
+        // Make existing fields safe for create/update
+        array('supplierId, warehouseId, totalAmount, status, createdBy', 'safe', 'on' => 'create, update'),
+        
+        // Search scenario
+        array('id, purchaseId, supplierId, warehouseId, totalAmount, status, createdBy, createdAt', 'safe', 'on'=>'search'),
+    );
+}
 
     /**
      * @return array relational rules.
@@ -76,41 +100,34 @@ class Purchase extends BaseModel
         return array(
             'id' => 'ID',
             'purchaseId' => 'Purchase ID',
-            'supplierId' => 'Supplier',
-            'warehouseId' => 'Warehouse',
+            'supplierId' => 'Supplier ID',  // Changed from 'Supplier'
+            'warehouseId' => 'Warehouse ID', // Changed from 'Warehouse'
             'totalAmount' => 'Total Amount',
             'status' => 'Status',
-            'notes' => 'Notes',
-            'expectedDelivery' => 'Expected Delivery',
             'createdBy' => 'Created By',
             'createdAt' => 'Created At',
-            'updatedAt' => 'Updated At',
+            // REMOVE: 'notes', 'expectedDelivery', 'updatedAt' - they don't exist in DB
         );
     }
 
     /**
-     * Behaviors
+     * Behaviors - Remove CTimestampBehavior since updatedAt doesn't exist
      */
     public function behaviors()
     {
         return array(
-            'CTimestampBehavior' => array(
-                'class' => 'zii.behaviors.CTimestampBehavior',
-                'createAttribute' => 'createdAt',
-                'updateAttribute' => 'updatedAt',
-                'setUpdateOnCreate' => true,
-            ),
+            // Remove CTimestampBehavior since updatedAt column doesn't exist
         );
     }
 
     /**
-     * Before save - Yii 1.x doesn't take parameters
+     * Before save - auto-generate purchaseId if not set
      */
     protected function beforeSave()
     {
         if (parent::beforeSave()) {
-            if ($this->isNewRecord) {
-                $this->purchaseId = $this->generateId('PUR_');
+            if ($this->isNewRecord && empty($this->purchaseId)) {
+                $this->purchaseId = $this->generateUlid();
             }
             
             return true;
@@ -129,31 +146,25 @@ class Purchase extends BaseModel
         if ($this->items && count($this->items) > 0) {
             $total = 0;
             foreach ($this->items as $item) {
-                $total += $item->quantity * $item->unitCost;
+                // Check if item has unitCost or unitPrice field
+                $unitPrice = property_exists($item, 'unitCost') ? $item->unitCost : 
+                            (property_exists($item, 'unitPrice') ? $item->unitPrice : 0);
+                $total += $item->quantity * $unitPrice;
             }
             
-            // Update total amount directly in database
-            Yii::app()->db->createCommand()
-                ->update('purchases', 
-                    array('totalAmount' => $total),
-                    'purchaseId = :purchaseId',
-                    array(':purchaseId' => $this->purchaseId)
-                );
-            
-            // Refresh this object
-            $this->refresh();
+            // Only update if total is different
+            if ($this->totalAmount != $total) {
+                Yii::app()->db->createCommand()
+                    ->update('purchases', 
+                        array('totalAmount' => $total),
+                        'id = :id',
+                        array(':id' => $this->id)
+                    );
+                
+                // Refresh this object
+                $this->refresh();
+            }
         }
-    }
-
-    /**
-     * Generate ID
-     */
-    private function generateId($prefix = '')
-    {
-        $microtime = str_replace('.', '', microtime(true));
-        $random = bin2hex(random_bytes(5));
-        $id = $prefix . substr($microtime, -10) . $random;
-        return substr($id, 0, 26);
     }
 
     /**
@@ -202,43 +213,42 @@ class Purchase extends BaseModel
     }
 
     /**
-     * Retrieves a list of models based on the current search/filter conditions.
-     *
-     * @return CActiveDataProvider the data provider that can return the models
-     * based on the search/filter conditions.
+     * Get API data for response
      */
-    public function search()
+    public function getApiData()
     {
-        $criteria=new CDbCriteria;
-
-        $criteria->compare('id',$this->id);
-        $criteria->compare('purchaseId',$this->purchaseId,true);
-        $criteria->compare('supplierId',$this->supplierId,true);
-        $criteria->compare('warehouseId',$this->warehouseId,true);
-        $criteria->compare('totalAmount',$this->totalAmount);
-        $criteria->compare('status',$this->status,true);
-        $criteria->compare('notes',$this->notes,true);
-        $criteria->compare('expectedDelivery',$this->expectedDelivery,true);
-        $criteria->compare('createdBy',$this->createdBy,true);
-        $criteria->compare('createdAt',$this->createdAt,true);
-        $criteria->compare('updatedAt',$this->updatedAt,true);
-
-        return new CActiveDataProvider($this, array(
-            'criteria'=>$criteria,
-            'sort'=>array(
-                'defaultOrder'=>'createdAt DESC',
-            ),
-            'pagination'=>array(
-                'pageSize'=>20,
-            ),
-        ));
+        $itemsData = array();
+        if ($this->items) {
+            foreach ($this->items as $item) {
+                $itemsData[] = array(
+                    'id' => $item->id,
+                    'productId' => $item->productId,
+                    'quantity' => $item->quantity,
+                    'unitPrice' => property_exists($item, 'unitCost') ? $item->unitCost : 
+                                  (property_exists($item, 'unitPrice') ? $item->unitPrice : 0),
+                    'totalPrice' => $item->quantity * (property_exists($item, 'unitCost') ? $item->unitCost : 
+                                     (property_exists($item, 'unitPrice') ? $item->unitPrice : 0))
+                );
+            }
+        }
+        
+        return array(
+            'id' => $this->id,
+            'purchaseId' => $this->purchaseId,
+            'supplierId' => $this->supplierId,
+            'warehouseId' => $this->warehouseId,
+            'totalAmount' => (float)$this->totalAmount,
+            'status' => $this->status,
+            'createdBy' => $this->createdBy,
+            'createdAt' => $this->createdAt,
+            'items' => $itemsData,
+            'supplier' => $this->supplier ? $this->supplier->attributes : null,
+            'warehouse' => $this->warehouse ? $this->warehouse->attributes : null
+        );
     }
 
     /**
      * Returns the static model of the specified AR class.
-     * Please note that you should have this exact method in all your CActiveRecord descendants!
-     * @param string $className active record class name.
-     * @return Purchase the static model class
      */
     public static function model($className=__CLASS__)
     {

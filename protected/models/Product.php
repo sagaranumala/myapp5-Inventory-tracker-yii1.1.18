@@ -20,7 +20,7 @@ class Product extends BaseModel
             array('sku', 'unique'),
             array('isActive', 'boolean'),
             array('sku, name', 'length', 'max' => 255),
-            array('description', 'safe'),
+            // array('description', 'safe'),
             array('isActive', 'default', 'value' => 1),
         );
     }
@@ -46,7 +46,7 @@ class Product extends BaseModel
             'productId' => 'Product ID',
             'sku' => 'SKU',
             'name' => 'Product Name',
-            'description' => 'Description',
+            // 'description' => 'Description',
             'categoryId' => 'Category',
             'unitPrice' => 'Unit Price',
             'costPrice' => 'Cost Price',
@@ -97,7 +97,7 @@ class Product extends BaseModel
             'productId' => $this->productId,
             'sku' => $this->sku,
             'name' => $this->name,
-            'description' => $this->description,
+            // 'description' => $this->description,
             'unitPrice' => (float)$this->unitPrice,
             'costPrice' => (float)$this->costPrice,
             'isActive' => (bool)$this->isActive,

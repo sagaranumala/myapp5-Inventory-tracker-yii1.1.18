@@ -155,4 +155,19 @@ public function actionTranslationDebug()
         }
     }
 }
+
+// In SiteController.php
+public function actionApiTest()
+{
+    error_log("[API TEST] Endpoint called");
+    
+    http_response_code(200);
+    header('Content-Type: application/json');
+    echo json_encode([
+        'message' => 'API test works',
+        'method' => $_SERVER['REQUEST_METHOD'],
+        'timestamp' => date('Y-m-d H:i:s')
+    ]);
+    Yii::app()->end();
+}
 }

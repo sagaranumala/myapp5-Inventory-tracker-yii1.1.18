@@ -1,115 +1,462 @@
-<!-- <?php
+<?php
 class PurchaseController extends Controller
 {
-    protected function arToArray($ar)
+    /**
+     * Send JSON response
+     */
+    protected function sendJson($data, $statusCode = 200)
     {
-        if (is_array($ar)) {
-            $data = [];
-            foreach ($ar as $item) {
-                $data[] = $this->arToArray($item);
-            }
-            return $data;
+        // Clean any output buffers
+        while (ob_get_level() > 0) {
+            ob_end_clean();
         }
-        $attributes = $ar->attributes;
-        foreach ($ar->relations() as $name => $relation) {
-            if ($ar->$name !== null) {
-                $attributes[$name] = $this->arToArray($ar->$name);
-            }
-        }
-        return $attributes;
+        
+        header('Content-Type: application/json');
+        http_response_code($statusCode);
+        echo json_encode($data);
+        Yii::app()->end();
     }
+
+     /**
+     * Debug version to see exact JSON
+     */
+    // public function actionCreate()
+    // {
+    //     // Start output buffer
+    //     ob_start();
+        
+    //     try {
+    //         // Set headers
+    //         header('Content-Type: application/json');
+            
+    //         // Handle POST request
+    //         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    //             // Get raw JSON
+    //             $rawJson = file_get_contents('php://input');
+                
+    //             // Log to error log for debugging
+    //             error_log("=== DEBUG PURCHASE CREATE ===");
+    //             error_log("Raw input length: " . strlen($rawJson));
+    //             error_log("Raw input: " . $rawJson);
+    //             error_log("Content-Type: " . ($_SERVER['CONTENT_TYPE'] ?? 'not set'));
+                
+    //             // Handle double-encoded JSON
+    //             $data = $rawJson;
+    //             $decodedCount = 0;
+                
+    //             // Keep decoding until we get an array or can't decode anymore
+    //             while (is_string($data) && $decodedCount < 5) {
+    //                 $temp = json_decode($data, true);
+    //                 if (json_last_error() === JSON_ERROR_NONE && $temp !== null) {
+    //                     $data = $temp;
+    //                     $decodedCount++;
+    //                     error_log("Decoded level $decodedCount, type: " . gettype($data));
+    //                 } else {
+    //                     break;
+    //                 }
+    //             }
+                
+    //             error_log("Final data type: " . gettype($data));
+    //             error_log("Final data: " . print_r($data, true));
+    //             error_log("JSON last error: " . json_last_error());
+    //             error_log("JSON last error msg: " . json_last_error_msg());
+    //             error_log("Decoded count: " . $decodedCount);
+                
+    //             // If data is still a string, try one more time
+    //             if (is_string($data)) {
+    //                 error_log("Data is still string, trying direct decode...");
+    //                 $data = json_decode($data, true);
+    //                 error_log("After direct decode, type: " . gettype($data));
+    //             }
+                
+    //             // Check if we have valid array
+    //             if (!is_array($data)) {
+    //                 error_log("ERROR: Data is not an array. Type: " . gettype($data));
+    //                 error_log("Data value: " . $data);
+    //                 throw new Exception('Invalid data format. Expected JSON object, got: ' . gettype($data));
+    //             }
+                
+    //             // Debug: Check if fields exist
+    //             error_log("Field check:");
+    //             error_log("  supplierId exists: " . (isset($data['supplierId']) ? 'YES' : 'NO'));
+                
+    //             if (isset($data['supplierId'])) {
+    //                 error_log("  supplierId value: " . $data['supplierId']);
+    //                 error_log("  supplierId type: " . gettype($data['supplierId']));
+    //                 error_log("  supplierId empty: " . (empty($data['supplierId']) ? 'YES' : 'NO'));
+    //             }
+                
+    //             // Check ALL keys in the data
+    //             error_log("All keys in data: " . implode(', ', array_keys($data)));
+                
+    //             // Check required fields
+    //             if (!isset($data['supplierId']) || empty(trim($data['supplierId']))) {
+    //                 error_log("ERROR: supplierId is missing or empty");
+    //                 throw new Exception('supplierId is required');
+    //             }
+                
+    //             if (!isset($data['warehouseId']) || empty(trim($data['warehouseId']))) {
+    //                 error_log("ERROR: warehouseId is missing or empty");
+    //                 throw new Exception('warehouseId is required');
+    //             }
+                
+    //             error_log("SUCCESS: Found supplierId: " . $data['supplierId'] . ", warehouseId: " . $data['warehouseId']);
+                
+    //             // Create purchase model
+    //             $model = new Purchase();
+    //             $model->supplierId = trim($data['supplierId']);
+    //             $model->warehouseId = trim($data['warehouseId']);
+    //             $model->totalAmount = isset($data['totalAmount']) ? floatval($data['totalAmount']) : 5;
+    //             $model->status = isset($data['status']) ? strtolower(trim($data['status'])) : 'draft';
+    //             $model->createdBy = isset($data['createdBy']) ? trim($data['createdBy']) : null;
+                
+    //             error_log("Model attributes before save: " . print_r($model->attributes, true));
+                
+    //             // Save purchase
+    //             if ($model->save()) {
+    //                 error_log("Purchase saved successfully! ID: " . $model->id . ", purchaseId: " . $model->purchaseId);
+                    
+    //                 // Return success
+    //                 ob_end_clean();
+    //                 echo json_encode([
+    //                     'success' => true,
+    //                     'message' => 'Purchase created successfully',
+    //                     'data' => [
+    //                         'id' => $model->id,
+    //                         'purchaseId' => $model->purchaseId,
+    //                         'supplierId' => $model->supplierId,
+    //                         'warehouseId' => $model->warehouseId,
+    //                         'status' => $model->status,
+    //                         'createdAt' => $model->createdAt
+    //                     ]
+    //                 ]);
+    //             } else {
+    //                 $errors = $model->getErrors();
+    //                 error_log("Save failed with errors: " . print_r($errors, true));
+    //                 throw new Exception('Failed to save purchase');
+    //             }
+                
+    //         } else {
+    //             // GET request - show example
+    //             ob_end_clean();
+    //             echo json_encode([
+    //                 'success' => true,
+    //                 'message' => 'Send POST request with JSON',
+    //                 'example' => [
+    //                     'supplierId' => 'SUP0000000000000000000001',
+    //                     'warehouseId' => 'WH0000000000000000000001',
+    //                     'status' => 'pending'
+    //                 ]
+    //             ]);
+    //         }
+            
+    //     } catch (Exception $e) {
+    //         ob_end_clean();
+    //         http_response_code(400);
+    //         echo json_encode([
+    //             'success' => false,
+    //             'message' => 'Failed to create purchase',
+    //             'error' => $e->getMessage()
+    //         ]);
+    //     }
+        
+    //     exit;
+    // }
+
+
+
     public function actionIndex()
     {
-        // $purchases = Purchase::model()->with('supplier', 'warehouse', 'items')->findAll();
-        // if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$purchases]);
-        // else $this->render('index',['purchases'=>$purchases]);
-
-         $purchases = Purchase::model()->with('supplier', 'warehouse', 'items')->findAll();
-
-        if ($this->isApiRequest()) {
-            $data = $this->arToArray($purchases);
-            $this->sendJson(['success' => true, 'data' => $data]);
-            return;
+        $purchases = Purchase::model()->with('supplier', 'warehouse', 'items')->findAll();
+        $data = [];
+        foreach ($purchases as $purchase) {
+            $data[] = $purchase->getApiData();
         }
+        $this->sendJson(['success' => true, 'data' => $data]);
     }
 
     public function actionView($id)
     {
         $purchase = Purchase::model()->with('supplier', 'warehouse', 'items')->findByPk($id);
-        if(!$purchase) throw new CHttpException(404,'Purchase not found');
-        if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$purchase]);
-        else $this->render('view',['purchase'=>$purchase]);
-    }
-
-    public function actionCreate()
-    {
-        $model = new Purchase();
-        if(isset($_POST['Purchase'])){
-            $model->attributes=$_POST['Purchase'];
-
-            $transaction = Yii::app()->db->beginTransaction();
-            try {
-                if($model->save()){
-                    // Save items
-                    if(isset($_POST['PurchaseItem'])){
-                        foreach($_POST['PurchaseItem'] as $itemData){
-                            $item = new PurchaseItem();
-                            $item->attributes = $itemData;
-                            $item->purchaseId = $model->id;
-                            if(!$item->save()) throw new Exception('Failed to save item');
-                            
-                            // Update stock
-                            $stock = WarehouseStock::model()->findByAttributes([
-                                'warehouseId'=>$model->warehouseId,
-                                'productId'=>$item->productId
-                            ]);
-                            if(!$stock){
-                                $stock = new WarehouseStock();
-                                $stock->warehouseId = $model->warehouseId;
-                                $stock->productId = $item->productId;
-                                $stock->quantity = 0;
-                            }
-                            $stock->quantity += $item->quantity;
-                            if(!$stock->save()) throw new Exception('Failed to update stock');
-                        }
-                    }
-
-                    $transaction->commit();
-                    if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$model]);
-                    else $this->redirect(['view','id'=>$model->id]);
-                }
-            } catch(Exception $e){
-                $transaction->rollback();
-                if($this->isApiRequest()) $this->sendJson(['success'=>false,'message'=>$e->getMessage()]);
-                else throw $e;
-            }
+        if (!$purchase) {
+            $this->sendJson(['success' => false, 'message' => 'Purchase not found'], 404);
         }
-        $suppliers = Supplier::model()->findAll();
-        $warehouses = Warehouse::model()->findAll();
-        $this->render('create',['model'=>$model,'suppliers'=>$suppliers,'warehouses'=>$warehouses]);
+        $this->sendJson(['success' => true, 'data' => $purchase->getApiData()]);
     }
 
     public function actionUpdate($id)
     {
         $model = Purchase::model()->findByPk($id);
-        if(!$model) throw new CHttpException(404);
-        if(isset($_POST['Purchase'])){
-            $model->attributes=$_POST['Purchase'];
-            if($model->save()){
-                if($this->isApiRequest()) $this->sendJson(['success'=>true,'data'=>$model]);
-                else $this->redirect(['view','id'=>$model->id]);
-            }
+        if (!$model) {
+            $this->sendJson(['success' => false, 'message' => 'Purchase not found'], 404);
         }
-        $suppliers = Supplier::model()->findAll();
-        $warehouses = Warehouse::model()->findAll();
-        $this->render('update',['model'=>$model,'suppliers'=>$suppliers,'warehouses'=>$warehouses]);
+        
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $json = file_get_contents('php://input');
+            $data = json_decode($json, true);
+            
+            if ($data) {
+                $model->attributes = $data;
+                if ($model->save()) {
+                    $this->sendJson(['success' => true, 'data' => $model->getApiData()]);
+                } else {
+                    $this->sendJson(['success' => false, 'message' => 'Update failed'], 400);
+                }
+            }
+        } else {
+            $this->sendJson(['success' => true, 'data' => $model->getApiData()]);
+        }
     }
 
     public function actionDelete($id)
     {
         $model = Purchase::model()->findByPk($id);
-        if($model) $model->delete();
-        if($this->isApiRequest()) $this->sendJson(['success'=>true]);
-        else $this->redirect(['index']);
+        if (!$model) {
+            $this->sendJson(['success' => false, 'message' => 'Purchase not found'], 404);
+        }
+        
+        if ($model->delete()) {
+            $this->sendJson(['success' => true, 'message' => 'Purchase deleted']);
+        } else {
+            $this->sendJson(['success' => false, 'message' => 'Delete failed'], 500);
+        }
     }
-} 
+
+
+
+
+
+public function actionCreate()
+{
+    // Start output buffer
+    ob_start();
+    
+    try {
+        // Set headers
+        header('Content-Type: application/json');
+        
+        // Handle POST request
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            // Get raw JSON
+            $rawJson = file_get_contents('php://input');
+            
+            // Log to error log for debugging
+            error_log("=== DEBUG PURCHASE CREATE ===");
+            error_log("Raw input length: " . strlen($rawJson));
+            error_log("Raw input: " . $rawJson);
+            error_log("Content-Type: " . ($_SERVER['CONTENT_TYPE'] ?? 'not set'));
+            
+            // Handle double-encoded JSON
+            $data = $rawJson;
+            $decodedCount = 0;
+            
+            // Keep decoding until we get an array or can't decode anymore
+            while (is_string($data) && $decodedCount < 5) {
+                $temp = json_decode($data, true);
+                if (json_last_error() === JSON_ERROR_NONE && $temp !== null) {
+                    $data = $temp;
+                    $decodedCount++;
+                    error_log("Decoded level $decodedCount, type: " . gettype($data));
+                } else {
+                    break;
+                }
+            }
+            
+            error_log("Final data type: " . gettype($data));
+            error_log("Final data: " . print_r($data, true));
+            
+            // If data is still a string, try one more time
+            if (is_string($data)) {
+                error_log("Data is still string, trying direct decode...");
+                $data = json_decode($data, true);
+                error_log("After direct decode, type: " . gettype($data));
+            }
+            
+            // Check if we have valid array
+            if (!is_array($data)) {
+                error_log("ERROR: Data is not an array. Type: " . gettype($data));
+                error_log("Data value: " . $data);
+                throw new Exception('Invalid data format. Expected JSON object, got: ' . gettype($data));
+            }
+            
+            // Debug: Check if fields exist
+            error_log("Field check:");
+            error_log("  supplierId exists: " . (isset($data['supplierId']) ? 'YES' : 'NO'));
+            error_log("  items exists: " . (isset($data['items']) ? 'YES' : 'NO'));
+            
+            if (isset($data['supplierId'])) {
+                error_log("  supplierId value: " . $data['supplierId']);
+            }
+            
+            if (isset($data['items'])) {
+                error_log("  items count: " . (is_array($data['items']) ? count($data['items']) : 'NOT ARRAY'));
+                error_log("  items: " . print_r($data['items'], true));
+            }
+            
+            // Check required fields
+            if (!isset($data['supplierId']) || empty(trim($data['supplierId']))) {
+                error_log("ERROR: supplierId is missing or empty");
+                throw new Exception('supplierId is required');
+            }
+            
+            if (!isset($data['warehouseId']) || empty(trim($data['warehouseId']))) {
+                error_log("ERROR: warehouseId is missing or empty");
+                throw new Exception('warehouseId is required');
+            }
+            
+            if (!isset($data['items']) || !is_array($data['items']) || empty($data['items'])) {
+                error_log("ERROR: items array is missing or empty");
+                throw new Exception('At least one purchase item is required');
+            }
+            
+            // Validate items
+            $totalAmount = 0;
+            foreach ($data['items'] as $index => $item) {
+                if (!isset($item['productId']) || empty(trim($item['productId']))) {
+                    throw new Exception('productId is required for item at index ' . $index);
+                }
+                if (!isset($item['quantity']) || $item['quantity'] <= 0) {
+                    throw new Exception('quantity must be greater than 0 for item at index ' . $index);
+                }
+                if (!isset($item['unitCost']) || $item['unitCost'] < 0) {
+                    throw new Exception('unitCost is required for item at index ' . $index);
+                }
+                
+                // Calculate item total
+                $quantity = floatval($item['quantity']);
+                $unitCost = floatval($item['unitCost']);
+                $itemTotal = $quantity * $unitCost;
+                $totalAmount += $itemTotal;
+                
+                error_log("Item $index - productId: {$item['productId']}, qty: $quantity, unitCost: $unitCost, total: $itemTotal");
+            }
+            
+            error_log("SUCCESS: Found supplierId: " . $data['supplierId'] . ", warehouseId: " . $data['warehouseId']);
+            error_log("Total amount calculated: " . $totalAmount);
+            
+            // Begin transaction
+            $transaction = Yii::app()->db->beginTransaction();
+            
+            try {
+                // Create purchase model
+                $purchase = new Purchase();
+                $purchase->supplierId = trim($data['supplierId']);
+                $purchase->warehouseId = trim($data['warehouseId']);
+                $purchase->totalAmount = $totalAmount;
+                
+                // Set status (default to draft if not provided)
+                if (isset($data['status']) && !empty(trim($data['status']))) {
+                    $purchase->status = strtolower(trim($data['status']));
+                } else {
+                    $purchase->status = Purchase::STATUS_DRAFT;
+                }
+                
+                // Set createdBy if provided
+                if (isset($data['createdBy']) && !empty(trim($data['createdBy']))) {
+                    $purchase->createdBy = trim($data['createdBy']);
+                }
+                
+                error_log("Purchase model attributes before save: " . print_r($purchase->attributes, true));
+                
+                // Save purchase
+                if (!$purchase->save()) {
+                    $errors = $purchase->getErrors();
+                    error_log("Purchase save failed with errors: " . print_r($errors, true));
+                    throw new Exception('Failed to save purchase: ' . implode(', ', array_map('reset', $errors)));
+                }
+                
+                error_log("Purchase saved successfully! ID: " . $purchase->id . ", purchaseId: " . $purchase->purchaseId);
+                
+                // Save purchase items
+                $savedItems = [];
+                foreach ($data['items'] as $index => $itemData) {
+                    $purchaseItem = new PurchaseItem();
+                    $purchaseItem->purchaseId = $purchase->purchaseId;
+                    $purchaseItem->productId = trim($itemData['productId']);
+                    $purchaseItem->quantity = intval($itemData['quantity']);
+                    $purchaseItem->unitCost = floatval($itemData['unitCost']);
+                    
+                    error_log("Saving purchase item $index: " . print_r($purchaseItem->attributes, true));
+                    
+                    if (!$purchaseItem->save()) {
+                        $errors = $purchaseItem->getErrors();
+                        error_log("PurchaseItem save failed with errors: " . print_r($errors, true));
+                        throw new Exception('Failed to save purchase item for product: ' . $itemData['productId']);
+                    }
+                    
+                    $savedItems[] = [
+                        'purchaseItemId' => $purchaseItem->purchaseItemId,
+                        'purchaseId' => $purchaseItem->purchaseId,
+                        'productId' => $purchaseItem->productId,
+                        'quantity' => $purchaseItem->quantity,
+                        'unitCost' => $purchaseItem->unitCost,
+                        'totalCost' => $purchaseItem->getTotalCost()
+                    ];
+                    
+                    error_log("Purchase item saved successfully: " . $purchaseItem->purchaseItemId);
+                }
+                
+                // Commit transaction
+                $transaction->commit();
+                
+                error_log("Transaction committed successfully. Items saved: " . count($savedItems));
+                
+                // Get the complete purchase data
+                $purchaseData = $purchase->getApiData();
+                
+                // Return success
+                ob_end_clean();
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Purchase created successfully',
+                    'data' => $purchaseData
+                ]);
+                
+            } catch (Exception $e) {
+                // Rollback transaction on error
+                $transaction->rollback();
+                error_log("Transaction rolled back due to error: " . $e->getMessage());
+                throw $e;
+            }
+            
+        } else {
+            // GET request - show example
+            ob_end_clean();
+            echo json_encode([
+                'success' => true,
+                'message' => 'Send POST request with JSON',
+                'example' => [
+                    'supplierId' => 'SUP0000000000000000000001',
+                    'warehouseId' => 'WH0000000000000000000001',
+                    'status' => 'draft',
+                    'createdBy' => 'USER000000000000000000001',
+                    'items' => [
+                        [
+                            'productId' => 'PROD00000000000000000001',
+                            'quantity' => 10,
+                            'unitCost' => 25.50
+                        ],
+                        [
+                            'productId' => 'PROD00000000000000000002',
+                            'quantity' => 5,
+                            'unitCost' => 100.00
+                        ]
+                    ]
+                ]
+            ]);
+        }
+        
+    } catch (Exception $e) {
+        ob_end_clean();
+        http_response_code(400);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Failed to create purchase',
+            'error' => $e->getMessage()
+        ]);
+    }
+    
+    exit;
+}
+
+}

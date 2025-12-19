@@ -9,17 +9,29 @@ class Warehouse extends BaseModel
         return 'warehouses';
     }
 
+
+    /**
+     * Specify ULID fields
+     */
+    protected function ulidFields()
+    {
+        return array('warehouseId');
+    }
     /**
      * @return array validation rules for model attributes.
      */
     public function rules()
     {
         return array(
-            array('name, warehouseId', 'required'),
+            array('name', 'required'),
             array('warehouseId', 'unique'),
             array('name, location', 'length', 'max' => 255),
             array('status', 'boolean'),
             array('status', 'default', 'value' => 1),
+            array('warehouseId', 'default', 'value' => function() {
+                return $this->generateUlid();
+            }, 'on' => 'insert'), // Auto-generate on insert
+            array('name, location, status', 'safe', 'on' => 'create, update'),
         );
     }
 
@@ -54,14 +66,6 @@ class Warehouse extends BaseModel
     public static function model($className = __CLASS__)
     {
         return parent::model($className);
-    }
-
-    /**
-     * Specify ULID fields
-     */
-    protected function ulidFields()
-    {
-        return array('warehouseId');
     }
 
     /**

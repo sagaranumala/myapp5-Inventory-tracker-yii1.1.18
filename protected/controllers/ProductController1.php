@@ -4,12 +4,10 @@ class ProductController extends Controller
     public function beforeAction($action)
     {
         // Disable CSRF for API endpoints
-        // if (Yii::app()->request->isAjaxRequest || Yii::app()->request->getRequestType() === 'POST') {
-        //     Yii::app()->request->enableCsrfValidation = false;
-        // }
-		 Yii::app()->request->enableCsrfValidation = false;
+        if (Yii::app()->request->isAjaxRequest || Yii::app()->request->getRequestType() === 'POST') {
+            Yii::app()->request->enableCsrfValidation = false;
+        }
         return parent::beforeAction($action);
-    
     }
     // Utility function to convert AR objects to arrays, including relations
     protected function arToArray($ar)
@@ -44,24 +42,24 @@ class ProductController extends Controller
     }
 
     // VIEW PRODUCT
-    // public function actionView($id)
-    // {
-    //     $product = Product::model()->with('category')->findByPk($id);
-    //     if (!$product) {
-    //         if ($this->isApiRequest()) {
-    //             $this->sendJson(['success' => false, 'message' => 'Product not found'], 404);
-    //             return;
-    //         }
-    //         throw new CHttpException(404);
-    //     }
+    public function actionView($id)
+    {
+        $product = Product::model()->with('category')->findByPk($id);
+        if (!$product) {
+            if ($this->isApiRequest()) {
+                $this->sendJson(['success' => false, 'message' => 'Product not found'], 404);
+                return;
+            }
+            throw new CHttpException(404);
+        }
 
-    //     if ($this->isApiRequest()) {
-    //         $data = $this->arToArray($product);
-    //         $this->sendJson(['success' => true, 'data' => $data]);
-    //         return;
-    //     }
-    //     $this->render('view', ['product' => $product]);
-    // }
+        if ($this->isApiRequest()) {
+            $data = $this->arToArray($product);
+            $this->sendJson(['success' => true, 'data' => $data]);
+            return;
+        }
+        $this->render('view', ['product' => $product]);
+    }
 
     // public function actionCreate()
     //     {
@@ -139,88 +137,36 @@ class ProductController extends Controller
 
 
 
-public function actionUpdate($productId)
-{
-    // Find product by ULID
-    $product = Product::model()->findByAttributes(['productId' => $productId]);
-
-    if (!$product) {
-        error_log("UPDATE ERROR: Product not found for productId={$productId}");
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => false,
-            'error' => 'Product not found'
-        ]);
-        Yii::app()->end();
-    }
-
-    // Read raw JSON input
-    $raw = file_get_contents('php://input');
-    error_log("RAW INPUT: " . $raw); // Log input in Docker
-
-    $input = json_decode($raw, true);
-
-    if (!$input || !is_array($input)) {
-        error_log("UPDATE ERROR: Invalid JSON input");
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => false,
-            'error' => 'Invalid input data',
-            'raw' => $raw // Optional: for Postman debugging
-        ]);
-        Yii::app()->end();
-    }
-
-    // Assign allowed fields
-    $fields = ['sku', 'name', 'categoryId', 'unitPrice', 'costPrice', 'description', 'isActive', 'reorderLevel', 'expiryDate'];
-    foreach ($fields as $field) {
-        if (isset($input[$field])) {
-            $product->$field = $input[$field];
-        }
-    }
-
-    error_log("PRODUCT DATA BEFORE SAVE: " . print_r($product->attributes, true));
-
-    // Attempt to save
-    if ($product->save()) {
-        error_log("PRODUCT UPDATED SUCCESSFULLY: productId={$productId}");
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => true,
-            'data' => $product->getApiData()
-        ]);
-    } else {
-        error_log("PRODUCT UPDATE FAILED: " . print_r($product->getErrors(), true));
-        header('Content-Type: application/json');
-        echo json_encode([
-            'success' => false,
-            'errors' => $product->getErrors(),
-            'debug_attributes' => $product->attributes
-        ]);
-    }
-
-    Yii::app()->end();
-}
-
-
     /**
-     * Example: Get product by ID
-     * GET request
+     * API: Update an existing product
      */
-    public function actionView($productId)
+    public function actionApiUpdate($id)
     {
-        $product = Product::model()->findByAttributes(['productId' => $productId]);
-
-        if (!$product) {
-            header('Content-Type: application/json');
-            echo json_encode(['success' => false, 'error' => 'Product not found']);
-            Yii::app()->end();
+        $model = $this->loadModel($id);
+        
+        // Get JSON input
+        $data = json_decode(file_get_contents('php://input'), true);
+        
+        if (!$data) {
+            $this->sendJsonResponse(400, 'Invalid JSON data');
+            return;
         }
-
-        header('Content-Type: application/json');
-        echo json_encode(['success' => true, 'data' => $product->getApiData()]);
-        Yii::app()->end();
+        
+        $model->attributes = $data;
+        
+        if ($model->save()) {
+            $this->sendJsonResponse(200, 'Product updated successfully', array(
+                'product' => $model->getApiData()
+            ));
+        } else {
+            $this->sendJsonResponse(422, 'Validation failed', array(
+                'errors' => $model->errors
+            ));
+        }
     }
+
+
+
 
     // DELETE PRODUCT
     public function actionDelete($id)
