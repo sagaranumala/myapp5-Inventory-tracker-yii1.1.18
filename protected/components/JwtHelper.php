@@ -9,7 +9,6 @@ require_once __DIR__ . '/../../vendor/autoload.php'; // adjust path if needed
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
-use Exception;
 
 class JwtHelper extends CApplicationComponent
 {

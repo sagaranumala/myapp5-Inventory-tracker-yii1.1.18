@@ -16,7 +16,7 @@ class PurchaseItem extends BaseModel
      */
     public function tableName()
     {
-        return 'purchaseItems';
+        return 'purchaseitems';
     }
 
     /**

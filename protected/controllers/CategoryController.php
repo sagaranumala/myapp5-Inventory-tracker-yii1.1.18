@@ -1,6 +1,24 @@
 <?php
 class CategoryController extends Controller
 {
+   protected function isApiRequest()
+    {
+        return Yii::app()->request->isAjaxRequest || 
+               Yii::app()->request->getParam('format') === 'json' ||
+               strpos(Yii::app()->request->getRequestUri(), '/api/') !== false;
+    }
+
+    /**
+     * Send JSON response
+     */
+    protected function sendJson($data, $statusCode = 200)
+    {
+        header('Content-Type: application/json');
+        http_response_code($statusCode);
+        echo json_encode($data);
+        Yii::app()->end();
+    }
+
     protected function arToArray($ar)
     {
         if (is_array($ar)) {

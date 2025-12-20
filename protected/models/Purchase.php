@@ -46,38 +46,35 @@ class Purchase extends BaseModel
     /**
      * @return array validation rules for model attributes.
      */
-    /**
- * @return array validation rules for model attributes.
- */
-public function rules()
-{
-    return array(
-        // Required fields with DIFFERENT messages
-        array('supplierId', 'required', 'message' => 'Supplier ID is required.'),
-        array('warehouseId', 'required', 'message' => 'Warehouse ID is required.'),
-        
-        // Numeric validation
-        array('totalAmount', 'numerical', 'message' => 'Total Amount must be a number.'),
-        
-        // Length validation
-        array('purchaseId, supplierId, warehouseId, createdBy', 'length', 'max'=>26),
-        array('status', 'length', 'max'=>50),
-        
-        // Safe fields
-        array('createdAt', 'safe'),
-        
-        // Auto-generate purchaseId on insert
-        array('purchaseId', 'default', 'value' => function() {
-            return $this->generateUlid();
-        }, 'on' => 'insert'),
-        
-        // Make existing fields safe for create/update
-        array('supplierId, warehouseId, totalAmount, status, createdBy', 'safe', 'on' => 'create, update'),
-        
-        // Search scenario
-        array('id, purchaseId, supplierId, warehouseId, totalAmount, status, createdBy, createdAt', 'safe', 'on'=>'search'),
-    );
-}
+    public function rules()
+    {
+        return array(
+            // Required fields with DIFFERENT messages
+            array('supplierId', 'required', 'message' => 'Supplier ID is required.'),
+            array('warehouseId', 'required', 'message' => 'Warehouse ID is required.'),
+            
+            // Numeric validation
+            array('totalAmount', 'numerical', 'message' => 'Total Amount must be a number.'),
+            
+            // Length validation
+            array('purchaseId, supplierId, warehouseId, createdBy', 'length', 'max'=>26),
+            array('status', 'length', 'max'=>50),
+            
+            // Safe fields
+            array('createdAt', 'safe'),
+            
+            // Auto-generate purchaseId on insert
+            array('purchaseId', 'default', 'value' => function() {
+                return $this->generateUlid();
+            }, 'on' => 'insert'),
+            
+            // Make existing fields safe for create/update
+            array('supplierId, warehouseId, totalAmount, status, createdBy', 'safe', 'on' => 'create, update'),
+            
+            // Search scenario
+            array('id, purchaseId, supplierId, warehouseId, totalAmount, status, createdBy, createdAt', 'safe', 'on'=>'search'),
+        );
+    }
 
     /**
      * @return array relational rules.
@@ -100,24 +97,21 @@ public function rules()
         return array(
             'id' => 'ID',
             'purchaseId' => 'Purchase ID',
-            'supplierId' => 'Supplier ID',  // Changed from 'Supplier'
-            'warehouseId' => 'Warehouse ID', // Changed from 'Warehouse'
+            'supplierId' => 'Supplier ID',
+            'warehouseId' => 'Warehouse ID',
             'totalAmount' => 'Total Amount',
             'status' => 'Status',
             'createdBy' => 'Created By',
             'createdAt' => 'Created At',
-            // REMOVE: 'notes', 'expectedDelivery', 'updatedAt' - they don't exist in DB
         );
     }
 
     /**
-     * Behaviors - Remove CTimestampBehavior since updatedAt doesn't exist
+     * Behaviors
      */
     public function behaviors()
     {
-        return array(
-            // Remove CTimestampBehavior since updatedAt column doesn't exist
-        );
+        return array();
     }
 
     /**
@@ -213,38 +207,297 @@ public function rules()
     }
 
     /**
+     * Get supplier name by supplierId
+     */
+    /**
+ * Get supplier name by supplierId
+ */
+public function getSupplierName()
+{
+    if (!$this->supplierId) {
+        return null;
+    }
+    
+    if ($this->supplier) {
+        return isset($this->supplier->name) ? $this->supplier->name : null;
+    }
+    
+    // If relation not loaded, query directly
+    $supplier = Supplier::model()->findByPk($this->supplierId);
+    if ($supplier) {
+        return isset($supplier->name) ? $supplier->name : null;
+    }
+    
+    return null;
+}
+
+/**
+ * Get warehouse name by warehouseId
+ */
+public function getWarehouseName()
+{
+    if (!$this->warehouseId) {
+        return null;
+    }
+    
+    if ($this->warehouse) {
+        return isset($this->warehouse->name) ? $this->warehouse->name : null;
+    }
+    
+    // If relation not loaded, query directly
+    $warehouse = Warehouse::model()->findByPk($this->warehouseId);
+    if ($warehouse) {
+        return isset($warehouse->name) ? $warehouse->name : null;
+    }
+    
+    return null;
+}
+    /**
+     * Named scope to include supplier and warehouse names
+     */
+    public function withNames()
+    {
+        $this->with(array(
+            'supplier' => array('select' => 'supplierId, name, supplierName'),
+            'warehouse' => array('select' => 'warehouseId, name, warehouseName')
+        ));
+        return $this;
+    }
+
+    /**
      * Get API data for response
      */
-    public function getApiData()
-    {
-        $itemsData = array();
-        if ($this->items) {
-            foreach ($this->items as $item) {
-                $itemsData[] = array(
-                    'id' => $item->id,
-                    'productId' => $item->productId,
-                    'quantity' => $item->quantity,
-                    'unitPrice' => property_exists($item, 'unitCost') ? $item->unitCost : 
-                                  (property_exists($item, 'unitPrice') ? $item->unitPrice : 0),
-                    'totalPrice' => $item->quantity * (property_exists($item, 'unitCost') ? $item->unitCost : 
-                                     (property_exists($item, 'unitPrice') ? $item->unitPrice : 0))
-                );
+    /**
+ * Get API data for response
+ */
+public function getApiData()
+{
+    $itemsData = array();
+    if ($this->items) {
+        foreach ($this->items as $item) {
+            // Check for unitCost or unitPrice field
+            $unitPrice = 0;
+            if (property_exists($item, 'unitCost')) {
+                $unitPrice = $item->unitCost;
+            } elseif (property_exists($item, 'unitPrice')) {
+                $unitPrice = $item->unitPrice;
+            } elseif (isset($item->unitCost)) {
+                $unitPrice = $item->unitCost;
+            } elseif (isset($item->unitPrice)) {
+                $unitPrice = $item->unitPrice;
             }
+            
+            $itemsData[] = array(
+                'id' => $item->id,
+                'purchaseItemId' => isset($item->purchaseItemId) ? $item->purchaseItemId : null,
+                'productId' => $item->productId,
+                'quantity' => (int)$item->quantity,
+                'unitPrice' => (float)$unitPrice,
+                'totalPrice' => (float)($item->quantity * $unitPrice)
+            );
+        }
+    }
+    
+    // Get supplier data
+    $supplierName = null;
+    $supplierData = null;
+    if ($this->supplier) {
+        $supplierName = $this->supplier->name;
+        $supplierData = array(
+            'supplierId' => $this->supplier->supplierId,
+            'name' => $this->supplier->name,
+            'email' => isset($this->supplier->email) ? $this->supplier->email : null,
+            'phone' => isset($this->supplier->phone) ? $this->supplier->phone : null,
+            'address' => isset($this->supplier->address) ? $this->supplier->address : null
+        );
+    } else {
+        // Fallback to getSupplierName()
+        $supplierName = $this->getSupplierName();
+    }
+    
+    // Get warehouse data
+    $warehouseName = null;
+    $warehouseData = null;
+    if ($this->warehouse) {
+        $warehouseName = $this->warehouse->name;
+        $warehouseData = array(
+            'warehouseId' => $this->warehouse->warehouseId,
+            'name' => $this->warehouse->name,
+            'location' => isset($this->warehouse->location) ? $this->warehouse->location : null,
+            'address' => isset($this->warehouse->address) ? $this->warehouse->address : null
+        );
+    } else {
+        // Fallback to getWarehouseName()
+        $warehouseName = $this->getWarehouseName();
+    }
+    
+    // Get creator data
+    $creatorData = null;
+    if ($this->creator) {
+        $creatorData = array('userId' => $this->creator->userId);
+        
+        // Check for common user fields
+        if (isset($this->creator->name)) {
+            $creatorData['name'] = $this->creator->name;
+        }
+        if (isset($this->creator->email)) {
+            $creatorData['email'] = $this->creator->email;
+        }
+        if (isset($this->creator->username)) {
+            $creatorData['username'] = $this->creator->username;
+        }
+        if (isset($this->creator->fullName)) {
+            $creatorData['fullName'] = $this->creator->fullName;
+        }
+    } elseif ($this->createdBy) {
+        // Try to load creator if not loaded
+        $creator = User::model()->findByPk($this->createdBy);
+        if ($creator) {
+            $creatorData = array('userId' => $creator->userId);
+            if (isset($creator->name)) $creatorData['name'] = $creator->name;
+            if (isset($creator->email)) $creatorData['email'] = $creator->email;
+        }
+    }
+    
+    return array(
+        'id' => (int)$this->id,
+        'purchaseId' => $this->purchaseId,
+        'supplierId' => $this->supplierId,
+        'warehouseId' => $this->warehouseId,
+        'supplierName' => $supplierName,
+        'warehouseName' => $warehouseName,
+        'totalAmount' => (float)$this->totalAmount,
+        'status' => $this->status,
+        'statusLabel' => $this->getStatusLabel(),
+        'createdBy' => $this->createdBy,
+        'createdAt' => $this->createdAt,
+        'itemsCount' => $this->getItemsCount(),
+        'totalQuantity' => $this->getTotalQuantity(),
+        'items' => $itemsData,
+        'supplier' => $supplierData,
+        'warehouse' => $warehouseData,
+        'creator' => $creatorData
+    );
+}
+
+    /**
+     * Search method for CGridView
+     */
+    public function search()
+    {
+        $criteria = new CDbCriteria;
+        $criteria->with = array('supplier', 'warehouse');
+
+        $criteria->compare('id', $this->id);
+        $criteria->compare('purchaseId', $this->purchaseId, true);
+        $criteria->compare('supplierId', $this->supplierId, true);
+        $criteria->compare('warehouseId', $this->warehouseId, true);
+        $criteria->compare('totalAmount', $this->totalAmount);
+        $criteria->compare('status', $this->status, true);
+        $criteria->compare('createdBy', $this->createdBy, true);
+        $criteria->compare('createdAt', $this->createdAt, true);
+
+        // Search by supplier name
+        if (!empty($this->supplierId)) {
+            $criteria->addSearchCondition('supplier.name', $this->supplierId, true, 'OR');
+            $criteria->addSearchCondition('supplier.supplierName', $this->supplierId, true, 'OR');
+        }
+
+        // Search by warehouse name
+        if (!empty($this->warehouseId)) {
+            $criteria->addSearchCondition('warehouse.name', $this->warehouseId, true, 'OR');
+            $criteria->addSearchCondition('warehouse.warehouseName', $this->warehouseId, true, 'OR');
+        }
+
+        return new CActiveDataProvider($this, array(
+            'criteria' => $criteria,
+            'sort' => array(
+                'defaultOrder' => 'createdAt DESC',
+                'attributes' => array(
+                    'supplierName' => array(
+                        'asc' => 'supplier.name ASC, supplier.supplierName ASC',
+                        'desc' => 'supplier.name DESC, supplier.supplierName DESC',
+                    ),
+                    'warehouseName' => array(
+                        'asc' => 'warehouse.name ASC, warehouse.warehouseName ASC',
+                        'desc' => 'warehouse.name DESC, warehouse.warehouseName DESC',
+                    ),
+                    '*',
+                ),
+            ),
+            'pagination' => array(
+                'pageSize' => 20,
+            ),
+        ));
+    }
+
+    /**
+     * Get purchase by purchaseId
+     * @param string $purchaseId
+     * @return Purchase|null
+     */
+    public static function findByPurchaseId($purchaseId)
+    {
+        return self::model()->findByAttributes(array('purchaseId' => $purchaseId));
+    }
+
+    /**
+     * Get purchases by supplierId
+     * @param string $supplierId
+     * @return Purchase[]
+     */
+    public static function findBySupplierId($supplierId)
+    {
+        return self::model()->findAllByAttributes(
+            array('supplierId' => $supplierId),
+            array('order' => 'createdAt DESC')
+        );
+    }
+
+    /**
+     * Get purchases by warehouseId
+     * @param string $warehouseId
+     * @return Purchase[]
+     */
+    public static function findByWarehouseId($warehouseId)
+    {
+        return self::model()->findAllByAttributes(
+            array('warehouseId' => $warehouseId),
+            array('order' => 'createdAt DESC')
+        );
+    }
+
+    /**
+     * Update purchase status
+     * @param string $status
+     * @return boolean
+     */
+    public function updateStatus($status)
+    {
+        $validStatuses = array_keys(self::getStatusOptions());
+        if (!in_array($status, $validStatuses)) {
+            return false;
         }
         
-        return array(
-            'id' => $this->id,
-            'purchaseId' => $this->purchaseId,
-            'supplierId' => $this->supplierId,
-            'warehouseId' => $this->warehouseId,
-            'totalAmount' => (float)$this->totalAmount,
-            'status' => $this->status,
-            'createdBy' => $this->createdBy,
-            'createdAt' => $this->createdAt,
-            'items' => $itemsData,
-            'supplier' => $this->supplier ? $this->supplier->attributes : null,
-            'warehouse' => $this->warehouse ? $this->warehouse->attributes : null
-        );
+        $this->status = $status;
+        return $this->save();
+    }
+
+    /**
+     * Calculate total amount from items
+     * @return float
+     */
+    public function calculateTotalAmount()
+    {
+        $total = 0;
+        if ($this->items) {
+            foreach ($this->items as $item) {
+                $unitPrice = property_exists($item, 'unitCost') ? $item->unitCost : 
+                            (property_exists($item, 'unitPrice') ? $item->unitPrice : 0);
+                $total += $item->quantity * $unitPrice;
+            }
+        }
+        return $total;
     }
 
     /**

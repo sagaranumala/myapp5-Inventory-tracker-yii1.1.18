@@ -1,7 +1,8 @@
 <?php
 class PurchaseController extends Controller
 {
-    /**
+
+     /**
      * Send JSON response
      */
     protected function sendJson($data, $statusCode = 200)
@@ -163,18 +164,6 @@ class PurchaseController extends Controller
     //     exit;
     // }
 
-
-
-    public function actionIndex()
-    {
-        $purchases = Purchase::model()->with('supplier', 'warehouse', 'items')->findAll();
-        $data = [];
-        foreach ($purchases as $purchase) {
-            $data[] = $purchase->getApiData();
-        }
-        $this->sendJson(['success' => true, 'data' => $data]);
-    }
-
     public function actionView($id)
     {
         $purchase = Purchase::model()->with('supplier', 'warehouse', 'items')->findByPk($id);
@@ -208,21 +197,97 @@ class PurchaseController extends Controller
         }
     }
 
-    public function actionDelete($id)
-    {
-        $model = Purchase::model()->findByPk($id);
-        if (!$model) {
-            $this->sendJson(['success' => false, 'message' => 'Purchase not found'], 404);
-        }
-        
-        if ($model->delete()) {
-            $this->sendJson(['success' => true, 'message' => 'Purchase deleted']);
-        } else {
-            $this->sendJson(['success' => false, 'message' => 'Delete failed'], 500);
+  public function actionDelete()
+{
+    // Method 1: Check URL parameter first (most likely how it's being sent)
+    $purchaseId = isset($_GET['purchaseId']) ? $_GET['purchaseId'] : null;
+    
+    // Method 2: Check POST data
+    if (!$purchaseId && isset($_POST['purchaseId'])) {
+        $purchaseId = $_POST['purchaseId'];
+    }
+    
+    // Method 3: Check raw JSON body
+    if (!$purchaseId) {
+        $rawBody = file_get_contents('php://input');
+        if (!empty($rawBody)) {
+            $data = json_decode($rawBody, true);
+            if (json_last_error() === JSON_ERROR_NONE && isset($data['purchaseId'])) {
+                $purchaseId = $data['purchaseId'];
+            }
         }
     }
-
-
+    
+    // Debug output
+    error_log("DEBUG - Purchase ID received: " . ($purchaseId ?: 'NULL'));
+    error_log("DEBUG - GET params: " . print_r($_GET, true));
+    error_log("DEBUG - POST params: " . print_r($_POST, true));
+    
+    if (!$purchaseId) {
+        $this->sendJson([
+            'success' => false, 
+            'message' => 'Purchase ID is required',
+            'debug_info' => [
+                'get_params' => $_GET,
+                'post_params' => $_POST,
+                'raw_input' => file_get_contents('php://input'),
+                'request_method' => $_SERVER['REQUEST_METHOD']
+            ]
+        ], 400);
+        return;
+    }
+    
+    // Clean the ID (remove any whitespace)
+    $purchaseId = trim($purchaseId);
+    
+    $transaction = Yii::app()->db->beginTransaction();
+    
+    try {
+        // Try to find the purchase
+        $model = Purchase::model()->findByPk($purchaseId);
+        
+        if (!$model) {
+            // Try alternative lookup - maybe by purchaseId field (not primary key)
+            $model = Purchase::model()->find('purchaseId = :pid', array(':pid' => $purchaseId));
+            
+            if (!$model) {
+                $this->sendJson([
+                    'success' => false, 
+                    'message' => "Purchase not found with ID: " . htmlspecialchars($purchaseId),
+                    'search_id' => $purchaseId
+                ], 404);
+                return;
+            }
+        }
+        
+        // Found it! Now delete items first
+        $itemsDeleted = PurchaseItem::model()->deleteAll(
+            'purchaseId = :pid',
+            array(':pid' => $model->id) // Use the actual ID from the model
+        );
+        
+        // Delete the purchase
+        if ($model->delete()) {
+            $transaction->commit();
+            $this->sendJson([
+                'success' => true, 
+                'message' => 'Purchase deleted successfully',
+                'deleted_id' => $model->id,
+                'items_deleted' => $itemsDeleted
+            ]);
+        } else {
+            $transaction->rollback();
+            $this->sendJson(['success' => false, 'message' => 'Failed to delete purchase'], 500);
+        }
+        
+    } catch (Exception $e) {
+        if (isset($transaction)) {
+            $transaction->rollback();
+        }
+        error_log("Delete error: " . $e->getMessage());
+        $this->sendJson(['success' => false, 'message' => 'Delete failed: ' . $e->getMessage()], 500);
+    }
+}
 
 
 
@@ -459,4 +524,462 @@ public function actionCreate()
     exit;
 }
 
+
+
+
+    public function actionIndex()
+    {
+
+        // Get purchaseId from query parameter if provided
+    $purchaseId = Yii::app()->request->getParam('purchaseId');
+    
+    // If purchaseId is provided, return single purchase
+    if ($purchaseId) {
+        return $this->getSinglePurchase($purchaseId);
+    }
+    
+
+        $connection = Yii::app()->db;
+        
+        try {
+            // Get purchases with manual SQL joins - REMOVED w.address
+            $command = $connection->createCommand("
+                SELECT 
+                    p.*,
+                    s.name as supplier_name,
+                    s.email as supplier_email,
+                    s.phone as supplier_phone,
+                    s.address as supplier_address,
+                    w.name as warehouse_name,
+                    w.location as warehouse_location,
+                    u.name as creator_name,
+                    u.email as creator_email
+                FROM purchases p
+                LEFT JOIN suppliers s ON p.supplierId = s.supplierId
+                LEFT JOIN warehouses w ON p.warehouseId = w.warehouseId
+                LEFT JOIN users u ON p.createdBy = u.userId
+                ORDER BY p.createdAt DESC
+            ");
+            
+            $purchases = $command->queryAll();
+            
+            $data = [];
+            foreach ($purchases as $p) {
+                // Get items for this purchase
+                $itemsCommand = $connection->createCommand("
+                    SELECT * FROM purchaseitems 
+                    WHERE purchaseId = :purchaseId
+                ");
+                $itemsCommand->bindParam(':purchaseId', $p['purchaseId']);
+                $items = $itemsCommand->queryAll();
+                
+                $itemsData = [];
+                foreach ($items as $item) {
+                    // Check for unitCost or unitPrice field
+                    $unitPrice = 0;
+                    if (isset($item['unitCost'])) {
+                        $unitPrice = $item['unitCost'];
+                    } elseif (isset($item['unitPrice'])) {
+                        $unitPrice = $item['unitPrice'];
+                    } elseif (isset($item['cost'])) {
+                        $unitPrice = $item['cost'];
+                    } elseif (isset($item['price'])) {
+                        $unitPrice = $item['price'];
+                    }
+                    
+                    $itemsData[] = [
+                        'id' => $item['id'],
+                        'purchaseItemId' => isset($item['purchaseItemId']) ? $item['purchaseItemId'] : null,
+                        'productId' => $item['productId'],
+                        'quantity' => (int)$item['quantity'],
+                        'unitPrice' => (float)$unitPrice,
+                        'totalPrice' => (float)($item['quantity'] * $unitPrice)
+                    ];
+                }
+                
+                // Handle creator data
+                $creatorData = null;
+                if ($p['createdBy']) {
+                    // Try to find the user
+                    $userCommand = $connection->createCommand("
+                        SELECT * FROM users 
+                        WHERE userId = :userId 
+                        LIMIT 1
+                    ");
+                    $userCommand->bindParam(':userId', $p['createdBy']);
+                    $creator = $userCommand->queryRow();
+                    
+                    if ($creator) {
+                        $creatorData = [
+                            'userId' => $creator['userId'],
+                            'name' => $creator['name'],
+                            'email' => $creator['email']
+                        ];
+                    } else {
+                        // If not found, get any user for reference
+                        $userCommand = $connection->createCommand("SELECT * FROM users LIMIT 1");
+                        $anyUser = $userCommand->queryRow();
+                        if ($anyUser) {
+                            $creatorData = [
+                                'userId' => $anyUser['userId'],
+                                'name' => $anyUser['name'] . ' (REF)',
+                                'email' => $anyUser['email']
+                            ];
+                        }
+                    }
+                }
+                
+                $data[] = [
+                    'id' => (int)$p['id'],
+                    'purchaseId' => $p['purchaseId'],
+                    'supplierId' => $p['supplierId'],
+                    'warehouseId' => $p['warehouseId'],
+                    'supplierName' => $p['supplier_name'],
+                    'warehouseName' => $p['warehouse_name'],
+                    'totalAmount' => (float)$p['totalAmount'],
+                    'status' => $p['status'],
+                    'statusLabel' => $this->getStatusLabelStatic($p['status']),
+                    'notes' => $p['notes'],
+                    'expectedDelivery' => $p['expectedDelivery'],
+                    'createdBy' => $p['createdBy'],
+                    'createdAt' => $p['createdAt'],
+                    'updatedAt' => $p['updatedAt'],
+                    'itemsCount' => count($items),
+                    'totalQuantity' => array_sum(array_column($items, 'quantity')),
+                    'items' => $itemsData,
+                    'supplier' => $p['supplier_name'] ? [
+                        'supplierId' => $p['supplierId'],
+                        'name' => $p['supplier_name'],
+                        'email' => $p['supplier_email'],
+                        'phone' => $p['supplier_phone'],
+                        'address' => $p['supplier_address']
+                    ] : null,
+                    'warehouse' => $p['warehouse_name'] ? [
+                        'warehouseId' => $p['warehouseId'],
+                        'name' => $p['warehouse_name'],
+                        'location' => $p['warehouse_location']
+                        // Removed address as it doesn't exist in warehouses table
+                    ] : null,
+                    'creator' => $creatorData
+                ];
+            }
+            
+            $this->sendJson(['success' => true, 'data' => $data]);
+            
+        } catch (Exception $e) {
+            error_log("Purchase index error: " . $e->getMessage());
+            $this->sendJson([
+                'success' => false, 
+                'message' => 'Database error',
+                'error' => $e->getMessage()
+            ]);
+        }
+    }
+
+        /**
+         * Helper method to get status label
+         */
+        private function getStatusLabelStatic($status)
+        {
+            $statusLabels = [
+                'draft' => 'Draft',
+                'pending' => 'Pending Approval', 
+                'ordered' => 'Ordered',
+                'partial' => 'Partially Received',
+                'received' => 'Fully Received',
+                'cancelled' => 'Cancelled',
+                'closed' => 'Closed',
+                'completed' => 'Completed'
+            ];
+            
+            return isset($statusLabels[$status]) ? $statusLabels[$status] : $status;
+        }
+
+
+        public function actionGetPurchase($purchaseId)
+{
+    $connection = Yii::app()->db;
+    
+    try {
+        // Get purchase with manual SQL joins - REMOVED w.address
+        $command = $connection->createCommand("
+            SELECT 
+                p.*,
+                s.name as supplier_name,
+                s.email as supplier_email,
+                s.phone as supplier_phone,
+                s.address as supplier_address,
+                w.name as warehouse_name,
+                w.location as warehouse_location,
+                u.name as creator_name,
+                u.email as creator_email
+            FROM purchases p
+            LEFT JOIN suppliers s ON p.supplierId = s.supplierId
+            LEFT JOIN warehouses w ON p.warehouseId = w.warehouseId
+            LEFT JOIN users u ON p.createdBy = u.userId
+            WHERE p.purchaseId = :purchaseId
+        ");
+        $command->bindParam(':purchaseId', $purchaseId);
+        $purchase = $command->queryRow();
+        
+        if (!$purchase) {
+            $this->sendJson(['success' => false, 'message' => 'Purchase not found']);
+            return;
+        }
+        
+        // Get items for this purchase
+        $itemsCommand = $connection->createCommand("
+            SELECT * FROM purchaseitems 
+            WHERE purchaseId = :purchaseId
+        ");
+        $itemsCommand->bindParam(':purchaseId', $purchaseId);
+        $items = $itemsCommand->queryAll();
+        
+        $itemsData = [];
+        foreach ($items as $item) {
+            // Check for unitCost or unitPrice field
+            $unitPrice = 0;
+            if (isset($item['unitCost'])) {
+                $unitPrice = $item['unitCost'];
+            } elseif (isset($item['unitPrice'])) {
+                $unitPrice = $item['unitPrice'];
+            } elseif (isset($item['cost'])) {
+                $unitPrice = $item['cost'];
+            } elseif (isset($item['price'])) {
+                $unitPrice = $item['price'];
+            }
+            
+            $itemsData[] = [
+                'id' => $item['id'],
+                'purchaseItemId' => isset($item['purchaseItemId']) ? $item['purchaseItemId'] : null,
+                'productId' => $item['productId'],
+                'quantity' => (int)$item['quantity'],
+                'unitPrice' => (float)$unitPrice,
+                'totalPrice' => (float)($item['quantity'] * $unitPrice)
+            ];
+        }
+        
+        // Handle creator data
+        $creatorData = null;
+        if ($purchase['createdBy']) {
+            // Try to find the user
+            $userCommand = $connection->createCommand("
+                SELECT * FROM users 
+                WHERE userId = :userId 
+                LIMIT 1
+            ");
+            $userCommand->bindParam(':userId', $purchase['createdBy']);
+            $creator = $userCommand->queryRow();
+            
+            if ($creator) {
+                $creatorData = [
+                    'userId' => $creator['userId'],
+                    'name' => $creator['name'],
+                    'email' => $creator['email']
+                ];
+            } else {
+                // If not found, get any user for reference
+                $userCommand = $connection->createCommand("SELECT * FROM users LIMIT 1");
+                $anyUser = $userCommand->queryRow();
+                if ($anyUser) {
+                    $creatorData = [
+                        'userId' => $anyUser['userId'],
+                        'name' => $anyUser['name'] . ' (REF)',
+                        'email' => $anyUser['email']
+                    ];
+                }
+            }
+        }
+        
+        $data = [
+            'id' => (int)$purchase['id'],
+            'purchaseId' => $purchase['purchaseId'],
+            'supplierId' => $purchase['supplierId'],
+            'warehouseId' => $purchase['warehouseId'],
+            'supplierName' => $purchase['supplier_name'],
+            'warehouseName' => $purchase['warehouse_name'],
+            'totalAmount' => (float)$purchase['totalAmount'],
+            'status' => $purchase['status'],
+            'statusLabel' => $this->getStatusLabelStatic($purchase['status']),
+            'notes' => $purchase['notes'],
+            'expectedDelivery' => $purchase['expectedDelivery'],
+            'createdBy' => $purchase['createdBy'],
+            'createdAt' => $purchase['createdAt'],
+            'updatedAt' => $purchase['updatedAt'],
+            'itemsCount' => count($items),
+            'totalQuantity' => array_sum(array_column($items, 'quantity')),
+            'items' => $itemsData,
+            'supplier' => $purchase['supplier_name'] ? [
+                'supplierId' => $purchase['supplierId'],
+                'name' => $purchase['supplier_name'],
+                'email' => $purchase['supplier_email'],
+                'phone' => $purchase['supplier_phone'],
+                'address' => $purchase['supplier_address']
+            ] : null,
+            'warehouse' => $purchase['warehouse_name'] ? [
+                'warehouseId' => $purchase['warehouseId'],
+                'name' => $purchase['warehouse_name'],
+                'location' => $purchase['warehouse_location']
+                // No address column in warehouses table
+            ] : null,
+            'creator' => $creatorData
+        ];
+        
+        $this->sendJson(['success' => true, 'data' => $data]);
+        
+    } catch (Exception $e) {
+        error_log("Get purchase error: " . $e->getMessage());
+        $this->sendJson([
+            'success' => false, 
+            'message' => 'Database error',
+            'error' => $e->getMessage()
+        ]);
+    }
 }
+
+/**
+ * Helper method to get single purchase
+ */
+private function getSinglePurchase($purchaseId)
+{
+    $connection = Yii::app()->db;
+    
+    try {
+        // Get purchase with manual SQL joins
+        $command = $connection->createCommand("
+            SELECT 
+                p.*,
+                s.name as supplier_name,
+                s.email as supplier_email,
+                s.phone as supplier_phone,
+                s.address as supplier_address,
+                w.name as warehouse_name,
+                w.location as warehouse_location,
+                u.name as creator_name,
+                u.email as creator_email
+            FROM purchases p
+            LEFT JOIN suppliers s ON p.supplierId = s.supplierId
+            LEFT JOIN warehouses w ON p.warehouseId = w.warehouseId
+            LEFT JOIN users u ON p.createdBy = u.userId
+            WHERE p.purchaseId = :purchaseId
+        ");
+        $command->bindParam(':purchaseId', $purchaseId);
+        $purchase = $command->queryRow();
+        
+        if (!$purchase) {
+            $this->sendJson(['success' => false, 'message' => 'Purchase not found123']);
+            return;
+        }
+        
+        // Get items for this purchase
+        $itemsCommand = $connection->createCommand("
+            SELECT * FROM purchaseitems 
+            WHERE purchaseId = :purchaseId
+        ");
+        $itemsCommand->bindParam(':purchaseId', $purchaseId);
+        $items = $itemsCommand->queryAll();
+        
+        $itemsData = [];
+        foreach ($items as $item) {
+            // Check for unitCost or unitPrice field
+            $unitPrice = 0;
+            if (isset($item['unitCost'])) {
+                $unitPrice = $item['unitCost'];
+            } elseif (isset($item['unitPrice'])) {
+                $unitPrice = $item['unitPrice'];
+            } elseif (isset($item['cost'])) {
+                $unitPrice = $item['cost'];
+            } elseif (isset($item['price'])) {
+                $unitPrice = $item['price'];
+            }
+            
+            $itemsData[] = [
+                'id' => $item['id'],
+                'purchaseItemId' => isset($item['purchaseItemId']) ? $item['purchaseItemId'] : null,
+                'productId' => $item['productId'],
+                'quantity' => (int)$item['quantity'],
+                'unitPrice' => (float)$unitPrice,
+                'totalPrice' => (float)($item['quantity'] * $unitPrice)
+            ];
+        }
+        
+        // Handle creator data
+        $creatorData = null;
+        if ($purchase['createdBy']) {
+            // Try to find the user
+            $userCommand = $connection->createCommand("
+                SELECT * FROM users 
+                WHERE userId = :userId 
+                LIMIT 1
+            ");
+            $userCommand->bindParam(':userId', $purchase['createdBy']);
+            $creator = $userCommand->queryRow();
+            
+            if ($creator) {
+                $creatorData = [
+                    'userId' => $creator['userId'],
+                    'name' => $creator['name'],
+                    'email' => $creator['email']
+                ];
+            } else {
+                // If not found, get any user for reference
+                $userCommand = $connection->createCommand("SELECT * FROM users LIMIT 1");
+                $anyUser = $userCommand->queryRow();
+                if ($anyUser) {
+                    $creatorData = [
+                        'userId' => $anyUser['userId'],
+                        'name' => $anyUser['name'] . ' (REF)',
+                        'email' => $anyUser['email']
+                    ];
+                }
+            }
+        }
+        
+        $data = [
+            'id' => (int)$purchase['id'],
+            'purchaseId' => $purchase['purchaseId'],
+            'supplierId' => $purchase['supplierId'],
+            'warehouseId' => $purchase['warehouseId'],
+            'supplierName' => $purchase['supplier_name'],
+            'warehouseName' => $purchase['warehouse_name'],
+            'totalAmount' => (float)$purchase['totalAmount'],
+            'status' => $purchase['status'],
+            'statusLabel' => $this->getStatusLabelStatic($purchase['status']),
+            'notes' => $purchase['notes'],
+            'expectedDelivery' => $purchase['expectedDelivery'],
+            'createdBy' => $purchase['createdBy'],
+            'createdAt' => $purchase['createdAt'],
+            'updatedAt' => $purchase['updatedAt'],
+            'itemsCount' => count($items),
+            'totalQuantity' => array_sum(array_column($items, 'quantity')),
+            'items' => $itemsData,
+            'supplier' => $purchase['supplier_name'] ? [
+                'supplierId' => $purchase['supplierId'],
+                'name' => $purchase['supplier_name'],
+                'email' => $purchase['supplier_email'],
+                'phone' => $purchase['supplier_phone'],
+                'address' => $purchase['supplier_address']
+            ] : null,
+            'warehouse' => $purchase['warehouse_name'] ? [
+                'warehouseId' => $purchase['warehouseId'],
+                'name' => $purchase['warehouse_name'],
+                'location' => $purchase['warehouse_location']
+            ] : null,
+            'creator' => $creatorData
+        ];
+        
+        $this->sendJson(['success' => true, 'data' => $data]);
+        
+    } catch (Exception $e) {
+        error_log("Get single purchase error: " . $e->getMessage());
+        $this->sendJson([
+            'success' => false, 
+            'message' => 'Database error',
+            'error' => $e->getMessage()
+        ]);
+    }
+}
+
+
+
+        }

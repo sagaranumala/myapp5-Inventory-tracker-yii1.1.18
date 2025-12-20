@@ -5,55 +5,32 @@ class Controller extends CController
     public $menu = array();
     public $breadcrumbs = array();
 
-    public function beforeAction($action)
+    protected function beforeAction($action)
     {
-        // Detect API request
-        if ($this->isApiRequest()) {
+        // Global CORS headers
+        $this->setCorsHeaders();
 
-            // Disable redirect for API requests
-            Yii::app()->user->loginUrl = null;
-
-            // Send CORS headers
-            $this->setCorsHeaders();
-
-            // If the controller defines protected API actions, check guest
-            if (method_exists($this, 'requireAuthForApi') && $this->requireAuthForApi($action)) {
-                if (Yii::app()->user->isGuest) {
-                    $this->sendJson([
-                        'success' => false,
-                        'message' => 'Unauthorized'
-                    ], 401);
-                }
-            }
+        // Preflight OPTIONS requests
+        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+            http_response_code(200);
+            echo json_encode(['success' => true]);
+            Yii::app()->end();
         }
 
         return parent::beforeAction($action);
     }
 
-    protected function isApiRequest()
-    {
-        $path = Yii::app()->request->getPathInfo();
-        return strpos($path, 'api/') === 0
-            || Yii::app()->request->isAjaxRequest
-            || isset($_SERVER['HTTP_AUTHORIZATION'])
-            || (isset($_SERVER['CONTENT_TYPE']) && strpos($_SERVER['CONTENT_TYPE'], 'application/json') !== false);
-    }
-
     protected function setCorsHeaders()
     {
-        $allowedOrigins = ['http://localhost:3000'];
+        $allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
+        $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 
-        // if (isset($_SERVER['HTTP_ORIGIN']) && in_array($_SERVER['HTTP_ORIGIN'], $allowedOrigins)) {
-        //     // header("Access-Control-Allow-Origin: {$_SERVER['HTTP_ORIGIN']}");
-        //     header("Access-Control-Allow-Credentials: true");
-        //     header("Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With");
-        //     header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-        //     header("Access-Control-Max-Age: 86400");
-        // }
-
-        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            http_response_code(200);
-            Yii::app()->end();
+        if (in_array($origin, $allowedOrigins)) {
+            header("Access-Control-Allow-Origin: $origin");
+            header("Access-Control-Allow-Credentials: true");
+            header("Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With");
+            header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+            header("Access-Control-Max-Age: 86400");
         }
     }
 
