@@ -1,131 +1,152 @@
 <?php
-// protected/controllers/AuthController.php
-
-class AuthController extends Controller
+class AuthController extends BaseApiController
 {
     /**
-     * Before any action: set CORS & disable CSRF for API
+     * Disable CSRF for API actions
      */
     public function beforeAction($action)
     {
-        $this->setCorsHeaders();
-
-        // Disable CSRF for API actions
-        $apiActions = ['signup','login','refresh','check'];
+        $apiActions = ['signup','login','refresh','check','profile','logout'];
         if (in_array($action->id, $apiActions)) {
             Yii::app()->request->enableCsrfValidation = false;
         }
-
         return parent::beforeAction($action);
     }
 
     /**
-     * Set global CORS headers
-     */
-    protected function setCorsHeaders()
-    {
-        $allowedOrigins = ['http://localhost:3000', 'http://127.0.0.1:3000'];
-        $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
-
-        if (in_array($origin, $allowedOrigins)) {
-            header("Access-Control-Allow-Origin: $origin");
-            header("Access-Control-Allow-Credentials: true");
-            header("Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With");
-            header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-            header("Access-Control-Max-Age: 86400");
-        }
-
-        // Handle OPTIONS preflight
-        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            http_response_code(200);
-            echo json_encode(['success'=>true]);
-            Yii::app()->end();
-        }
-    }
-
-    /**
-     * Helper to send JSON responses
-     */
-    protected function sendJson($data, $status=200)
-    {
-        if (!headers_sent()) {
-            header('Content-Type: application/json');
-            http_response_code($status);
-        }
-        echo json_encode($data, JSON_PRETTY_PRINT);
-        Yii::app()->end();
-    }
-
-    /**
-     * POST /auth/signup
-     */
-    public function actionSignup()
-    {
-        if (!Yii::app()->request->isPostRequest) {
-            return $this->sendJson(['success'=>false,'message'=>'POST required'], 405);
-        }
-
-        $raw = file_get_contents('php://input');
-        $data = json_decode($raw,true);
-
-        if (!is_array($data) || empty($data['email']) || empty($data['password']) || empty($data['name'])) {
-            return $this->sendJson(['success'=>false,'message'=>'Name, email, and password required'], 400);
-        }
-
-        $user = new User();
-        $user->name = trim($data['name']);
-        $user->email = trim($data['email']);
-        $user->password = $data['password']; // hashed automatically in User::beforeSave
-        $user->phone = $data['phone'] ?? null;
-        $user->role = $data['role'] ?? 'user';
-        $user->status = 1;
-
-        if ($user->save()) {
-            return $this->sendJson(['success'=>true,'data'=>$user->getApiData()],201);
-        }
-
-        return $this->sendJson([
-            'success'=>false,
-            'message'=>'Failed to create user',
-            'errors'=>$user->getErrors()
-        ],422);
-    }
-
-    /**
-     * POST /auth/login
+     * User login
      */
     public function actionLogin()
     {
         if (!Yii::app()->request->isPostRequest) {
-            return $this->sendJson(['success'=>false,'message'=>'POST required'], 405);
+            Yii::app()->jwt->sendResponse(false, 'Method not allowed. Use POST', null, 405);
         }
 
-        $raw = file_get_contents('php://input');
-        $data = json_decode($raw,true);
-
-        if (!is_array($data) || empty($data['email']) || empty($data['password'])) {
-            return $this->sendJson(['success'=>false,'message'=>'Email & password required'], 400);
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            Yii::app()->jwt->sendResponse(false, 'Invalid JSON format', null, 400);
         }
 
-        $email = trim($data['email']);
-        $password = $data['password'];
-
-        $user = User::model()->findByAttributes(['email'=>$email]);
-
-        if (!$user || !$user->validatePassword($password)) {
-            return $this->sendJson(['success'=>false,'message'=>'Invalid credentials'],401);
+        if (empty($data['email']) || empty($data['password'])) {
+            Yii::app()->jwt->sendResponse(false, 'Email and password are required', null, 400);
         }
 
-        // Generate JWT token
-        $jwt = Yii::app()->jwt;
-        $token = $jwt->generateToken($user->userId, $user->email, $user->role, $user->name);
+        $user = User::model()->findByAttributes(['email' => trim($data['email'])]);
+        if (!$user || !$user->validatePassword($data['password'])) {
+            Yii::app()->jwt->sendResponse(false, 'Invalid email or password', null, 401);
+        }
 
-        return $this->sendJson([
-            'success'=>true,
-            'data'=>[
-                'token'=>$token,
-                'user'=>$user->getApiData()
-            ]
-        ],200);
+        if ($user->status != 1) {
+            Yii::app()->jwt->sendResponse(false, 'Account is not active', null, 403);
+        }
+
+        $token = Yii::app()->jwt->generateToken(
+            $user->userId,
+            $user->email,
+            $user->role,
+            $user->name
+        );
+
+        $this->logLogin($user);
+
+        Yii::app()->jwt->sendResponse(true, 'Login successful', [
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'expires_in' => Yii::app()->jwt->getExpiryTime(),
+            'user' => $this->getSafeUserData($user)
+        ], 200);
+    }
+
+    /**
+     * User registration
+     */
+    public function actionSignup()
+    {
+        if (!Yii::app()->request->isPostRequest) {
+            Yii::app()->jwt->sendResponse(false, 'Method not allowed. Use POST', null, 405);
+        }
+
+        $data = json_decode(file_get_contents('php://input'), true);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            Yii::app()->jwt->sendResponse(false, 'Invalid JSON format', null, 400);
+        }
+
+        if (empty($data['name']) || empty($data['email']) || empty($data['password'])) {
+            Yii::app()->jwt->sendResponse(false, 'Name, email, and password are required', null, 400);
+        }
+
+        if (!filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
+            Yii::app()->jwt->sendResponse(false, 'Invalid email format', null, 400);
+        }
+
+        if (strlen($data['password']) < 8) {
+            Yii::app()->jwt->sendResponse(false, 'Password must be at least 8 characters', null, 400);
+        }
+
+        if (User::model()->findByAttributes(['email' => trim($data['email'])])) {
+            Yii::app()->jwt->sendResponse(false, 'Email already registered', null, 409);
+        }
+
+        $user = new User();
+        $user->name = trim($data['name']);
+        $user->email = strtolower(trim($data['email']));
+        $user->password = $data['password']; // assume hashing in setter
+        $user->role = 'user';
+        $user->status = 1;
+        // $user->created_at = date('Y-m-d H:i:s');
+
+        if (!$user->save()) {
+            Yii::app()->jwt->sendResponse(false, 'Registration failed', $user->getErrors(), 422);
+        }
+
+        $token = Yii::app()->jwt->generateToken(
+            $user->userId,
+            $user->email,
+            $user->role,
+            $user->name
+        );
+
+        Yii::app()->jwt->sendResponse(true, 'Registration successful', [
+            'token' => $token,
+            'token_type' => 'Bearer',
+            'expires_in' => Yii::app()->jwt->getExpiryTime(),
+            'user' => $this->getSafeUserData($user)
+        ], 201);
+    }
+
+    /**
+     * Profile
+     */
+    public function actionProfile()
+    {
+        $currentUser = Yii::app()->jwt->getCurrentUser();
+        if (!$currentUser) {
+            Yii::app()->jwt->sendResponse(false, 'Unauthorized', null, 401);
+        }
+        Yii::app()->jwt->sendResponse(true, 'Profile fetched', $currentUser);
+    }
+
+    /**
+     * Logout
+     */
+    public function actionLogout()
+    {
+        Yii::app()->jwt->sendResponse(true, 'Logged out successfully');
+    }
+
+    private function getSafeUserData($user)
+    {
+        return [
+            'id' => $user->userId,
+            'name' => $user->name,
+            'email' => $user->email,
+            'role' => $user->role,
+            // 'created_at' => $user->created_at
+        ];
+    }
+
+    private function logLogin($user)
+    {
+        // Implement login logging if needed
     }
 }

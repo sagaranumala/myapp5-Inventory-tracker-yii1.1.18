@@ -37,12 +37,12 @@ class JobsApiController extends Controller
 
         $origin = isset($_SERVER['HTTP_ORIGIN']) ? $_SERVER['HTTP_ORIGIN'] : '';
 
-        if (in_array($origin, $allowedOrigins)) {
-            header("Access-Control-Allow-Origin: {$origin}");
-            header("Access-Control-Allow-Credentials: true");
-        } else {
-            header("Access-Control-Allow-Origin: *");
-        }
+        // if (in_array($origin, $allowedOrigins)) {
+        //     header("Access-Control-Allow-Origin: {$origin}");
+        //     header("Access-Control-Allow-Credentials: true");
+        // } else {
+        //     header("Access-Control-Allow-Origin: *");
+        // }
 
         header("Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With");
         header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");

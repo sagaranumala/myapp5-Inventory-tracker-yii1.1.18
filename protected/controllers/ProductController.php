@@ -26,7 +26,7 @@ class ProductController extends Controller
         // if (Yii::app()->request->isAjaxRequest || Yii::app()->request->getRequestType() === 'POST') {
         //     Yii::app()->request->enableCsrfValidation = false;
         // }
-		 Yii::app()->request->enableCsrfValidation = false;
+		//  Yii::app()->request->enableCsrfValidation = false;
         return parent::beforeAction($action);
     
     }

@@ -10,6 +10,9 @@ defined('DB_PASS') or define('DB_PASS', $env['DB_PASS'] ?? '');
 defined('SMTP_EMAIL') or define('SMTP_EMAIL', $env['SMTP_EMAIL'] ?? '');
 defined('SMTP_PASSWORD') or define('SMTP_PASSWORD', $env['SMTP_PASSWORD'] ?? '');
 
+// ---------------------------------------------------
+// MAIN CONFIG
+// ---------------------------------------------------
 return array(
 
     'basePath' => dirname(__FILE__) . DIRECTORY_SEPARATOR . '..',
@@ -25,6 +28,8 @@ return array(
         'application.models.*',
         'application.components.*',
         'application.controllers.*',
+        // 'application.behaviors.*' only if using behaviors
+        // 'application.extensions.*' only if using extensions
     ),
 
     // ---------------------------------------------------
@@ -34,22 +39,21 @@ return array(
         'gii' => array(
             'class' => 'system.gii.GiiModule',
             'password' => 'gii123',
-            'ipFilters' => array('*'),
+            'ipFilters' => array('*'), // Allow all IPs for dev; restrict in production
         ),
     ),
 
     // ---------------------------------------------------
     // COMPONENTS
     // ---------------------------------------------------
-    
     'components' => array(
 
-        // User
+        // User - optional for API-only backend
         'user' => array(
-            'allowAutoLogin' => true,
+            'allowAutoLogin' => true, 
         ),
 
-        // JWT
+        // JWT helper
         'jwt' => array(
             'class' => 'JwtHelper',
             'secretKey' => getenv('JWT_SECRET') ?: 'your-super-secret-jwt-key-2024',
@@ -68,10 +72,9 @@ return array(
 
         // URL Manager
         'urlManager' => array(
-            'urlFormat' => 'get',
+            'urlFormat' => 'get', // Use 'path' for pretty URLs if needed
             'showScriptName' => true,
             'rules' => array(
-
                 // Blog
                 'blogs' => 'blog/index',
                 'blog/<id:\d+>' => 'blog/view',
@@ -99,26 +102,22 @@ return array(
                 'api/users/update/<id:\d+>' => 'api/updateUser',
                 'api/users/delete/<id:\d+>' => 'api/deleteUser',
 
-                // Default (MUST BE LAST)
+                // Default fallback - MUST BE LAST
                 '<controller:\w+>/<id:\d+>' => '<controller>/view',
                 '<controller:\w+>/<action:\w+>/<id:\d+>' => '<controller>/<action>',
                 '<controller:\w+>/<action:\w+>' => '<controller>/<action>',
             ),
         ),
 
-        // Translations - FIXED
+        // Messages / translations - optional
         'messages' => array(
             'class' => 'CPhpMessageSource',
-            'basePath' => dirname(__FILE__) . '/../messages',  // FIXED PATH
+            'basePath' => dirname(__FILE__) . '/../messages', 
             'forceTranslation' => true,
-            // Optional: For debugging, disable cache
-            'cachingDuration' => 0,
-            // Optional: Enable extended caching
-            // 'cacheID' => 'cache',
+            'cachingDuration' => 0, // Disable cache for dev
         ),
 
-
-        // Request
+        // Request - no CSRF for APIs
         'request' => array(
             'enableCookieValidation' => false,
             'enableCsrfValidation' => false,
@@ -129,10 +128,10 @@ return array(
 
         // Error handler
         'errorHandler' => array(
-            'errorAction' => 'site/error',
+            'errorAction' => 'site/error', // Customize JSON output if needed
         ),
 
-        // Logs
+        // Logging
         'log' => array(
             'class' => 'CLogRouter',
             'routes' => array(
@@ -145,43 +144,17 @@ return array(
     ),
 
     // ---------------------------------------------------
-    // PARAMS (ONLY ONE PLACE)
+    // PARAMETERS
     // ---------------------------------------------------
     'params' => array(
         'adminEmail' => 'webmaster@example.com',
         'salt' => 'your-secret-salt-string',
         'jwtSecret' => 'your-super-secret-jwt-key-32-chars-minimum!',
 
-        // ✅ Language config
         'languages' => array(
             'en' => 'English',
             'ar' => 'العربية',
         ),
-        'defaultLanguage' => 'en',  // Add this for consistency
+        'defaultLanguage' => 'en',
     ),
-
-    // ---------------------------------------------------
-    // CORS
-    // ---------------------------------------------------
-    'onBeginRequest' => function () {
-
-        $allowedOrigins = array('http://localhost:3000');
-        $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-
-        if (in_array($origin, $allowedOrigins)) {
-            header("Access-Control-Allow-Origin: {$origin}");
-            header("Access-Control-Allow-Credentials: true");
-        } else {
-            header("Access-Control-Allow-Origin: *");
-        }
-
-        header("Access-Control-Allow-Headers: Authorization, Content-Type, X-Requested-With");
-        header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-        header("Access-Control-Max-Age: 86400");
-
-        if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
-            http_response_code(200);
-            Yii::app()->end();
-        }
-    },
 );

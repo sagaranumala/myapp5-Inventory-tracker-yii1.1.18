@@ -1,9 +1,38 @@
 <?php
 class SiteController extends Controller
 {
+
+    public function beforeAction($action)
+{
+    // Only set it once
+    // if (!headers_sent()) {
+    //     header("Access-Control-Allow-Origin: http://localhost:3000");
+    //     header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+    //     header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With, X-CSRF-Token");
+    // }
+
+    // Handle preflight OPTIONS requests
+    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+        http_response_code(200);
+        Yii::app()->end();
+    }
+
+    return parent::beforeAction($action);
+}
+
     /**
      * Declares class-based actions.
      */
+    public function actionCsrf()
+{
+    header('Content-Type: application/json');
+    echo CJSON::encode([
+        'csrfToken' => Yii::app()->request->csrfToken,
+        'csrfTokenName' => Yii::app()->request->csrfTokenName,
+    ]);
+    Yii::app()->end();
+}
+
    public function actions()
 {
     // Remove the CErrorAction reference completely

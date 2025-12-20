@@ -19,8 +19,6 @@ class JwtHelper extends CApplicationComponent
     public function init()
     {
         parent::init();
-        
-        // Check if JWT class exists after autoload
         if (!class_exists('Firebase\JWT\JWT')) {
             throw new CException('Firebase JWT library not found. Run: composer require firebase/php-jwt');
         }
@@ -37,9 +35,9 @@ class JwtHelper extends CApplicationComponent
             'exp' => time() + $this->expireTime,
             'data' => [
                 'userId' => $userId,
-                'email' => $email,
-                'role' => $role,
-                'name' => $name
+                'email'  => $email,
+                'role'   => $role,
+                'name'   => $name
             ]
         ];
 
@@ -53,7 +51,7 @@ class JwtHelper extends CApplicationComponent
     {
         try {
             $decoded = JWT::decode($token, new Key($this->secretKey, $this->algorithm));
-            return (array) $decoded->data;
+            return (array)$decoded->data;
         } catch (Exception $e) {
             Yii::log('JWT Error: ' . $e->getMessage(), 'error');
             return null;
@@ -65,9 +63,7 @@ class JwtHelper extends CApplicationComponent
      */
     public function extractToken()
     {
-        // Check Authorization header
         $authHeader = null;
-        
         if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
             $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
         } elseif (function_exists('getallheaders')) {
@@ -79,16 +75,12 @@ class JwtHelper extends CApplicationComponent
                 }
             }
         }
-        
         if ($authHeader && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
             return trim($matches[1]);
         }
-        
-        // Check query parameter
         if (isset($_GET['token'])) {
             return trim($_GET['token']);
         }
-        
         return null;
     }
 
@@ -98,9 +90,7 @@ class JwtHelper extends CApplicationComponent
     public function getCurrentUser()
     {
         $token = $this->extractToken();
-        if (!$token) {
-            return null;
-        }
+        if (!$token) return null;
         return $this->validateToken($token);
     }
 
@@ -111,14 +101,19 @@ class JwtHelper extends CApplicationComponent
     {
         header('Content-Type: application/json');
         http_response_code($httpCode);
-        
-        $response = [
+        echo json_encode([
             'success' => $success,
             'message' => $message,
             'data' => $data
-        ];
-        
-        echo json_encode($response);
+        ]);
         Yii::app()->end();
+    }
+
+    /**
+     * Get expiry time
+     */
+    public function getExpiryTime()
+    {
+        return $this->expireTime;
     }
 }
