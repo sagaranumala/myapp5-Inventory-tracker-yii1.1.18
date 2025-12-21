@@ -39,6 +39,23 @@ class SiteController extends Controller
     return array();
 }
 
+
+// protected/controllers/SiteController.php
+
+    // ... existing methods ...
+
+    /**
+     * Test JWT generation for two users
+     */
+
+public function actionTestJwt()
+{
+    var_dump(Yii::app()->jwt);
+    var_dump(method_exists(Yii::app()->jwt, 'sendResponse'));
+    Yii::app()->end();
+}
+
+
 /**
  * Error action to handle errors
  */

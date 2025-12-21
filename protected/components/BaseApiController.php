@@ -11,6 +11,19 @@ class BaseApiController extends CController
         Yii::app()->end();
     }
 
+     protected function sendResponse($success, $message, $data = null, $status = 200)
+    {
+        header('Content-Type: application/json');
+        http_response_code($status);
+
+        echo json_encode([
+            'success' => $success,
+            'message' => $message,
+            'data'    => $data
+        ]);
+
+        Yii::app()->end();
+    }
     /**
      * Get current authenticated user from JWT
      */

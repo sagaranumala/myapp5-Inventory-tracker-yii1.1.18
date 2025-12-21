@@ -4,8 +4,7 @@
  * Install: composer require firebase/php-jwt
  */
 
-// Load Composer autoload
-require_once __DIR__ . '/../../vendor/autoload.php'; // adjust path if needed
+require_once __DIR__ . '/../../vendor/autoload.php'; // Adjust path
 
 use Firebase\JWT\JWT;
 use Firebase\JWT\Key;
@@ -26,32 +25,25 @@ class JwtHelper extends CApplicationComponent
 
     /**
      * Generate JWT token
+     * Accepts a single array payload
      */
-    public function generateToken($userId, $email, $role, $name)
+    public function generateToken(array $payload)
     {
-        $payload = [
-            'iss' => 'your-app',
-            'iat' => time(),
-            'exp' => time() + $this->expireTime,
-            'data' => [
-                'userId' => $userId,
-                'email'  => $email,
-                'role'   => $role,
-                'name'   => $name
-            ]
-        ];
+        $payload['iat'] = time();
+        $payload['exp'] = time() + $this->expireTime;
 
         return JWT::encode($payload, $this->secretKey, $this->algorithm);
     }
 
     /**
-     * Validate JWT token
+     * Validate and decode JWT token
+     * Returns decoded payload or null
      */
     public function validateToken($token)
     {
         try {
             $decoded = JWT::decode($token, new Key($this->secretKey, $this->algorithm));
-            return (array)$decoded->data;
+            return (array) $decoded->data ?? null; // Return inner 'data' array
         } catch (Exception $e) {
             Yii::log('JWT Error: ' . $e->getMessage(), 'error');
             return null;
@@ -59,11 +51,12 @@ class JwtHelper extends CApplicationComponent
     }
 
     /**
-     * Extract token from request
+     * Extract token from request (Authorization header or query parameter)
      */
     public function extractToken()
     {
         $authHeader = null;
+
         if (isset($_SERVER['HTTP_AUTHORIZATION'])) {
             $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
         } elseif (function_exists('getallheaders')) {
@@ -75,23 +68,36 @@ class JwtHelper extends CApplicationComponent
                 }
             }
         }
+
         if ($authHeader && preg_match('/Bearer\s+(.*)$/i', $authHeader, $matches)) {
             return trim($matches[1]);
         }
+
         if (isset($_GET['token'])) {
             return trim($_GET['token']);
         }
+
         return null;
     }
 
     /**
-     * Get current user from token
+     * Get current authenticated user from JWT
      */
     public function getCurrentUser()
     {
         $token = $this->extractToken();
-        if (!$token) return null;
+        if (!$token) {
+            return null;
+        }
         return $this->validateToken($token);
+    }
+
+    /**
+     * Returns the configured expiration time in seconds
+     */
+    public function getExpiryTime()
+    {
+        return $this->expireTime;
     }
 
     /**
@@ -101,19 +107,14 @@ class JwtHelper extends CApplicationComponent
     {
         header('Content-Type: application/json');
         http_response_code($httpCode);
-        echo json_encode([
+
+        $response = [
             'success' => $success,
             'message' => $message,
-            'data' => $data
-        ]);
-        Yii::app()->end();
-    }
+            'data'    => $data
+        ];
 
-    /**
-     * Get expiry time
-     */
-    public function getExpiryTime()
-    {
-        return $this->expireTime;
+        echo json_encode($response);
+        Yii::app()->end();
     }
 }

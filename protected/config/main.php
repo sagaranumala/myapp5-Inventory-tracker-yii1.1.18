@@ -55,7 +55,7 @@ return array(
 
         // JWT helper
         'jwt' => array(
-            'class' => 'JwtHelper',
+            'class' => 'application.components.JwtHelper',
             'secretKey' => getenv('JWT_SECRET') ?: 'your-super-secret-jwt-key-2024',
             'expireTime' => 86400,
         ),
